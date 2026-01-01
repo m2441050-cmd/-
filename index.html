@@ -106,7 +106,39 @@
             <button id="logout" class="ghost" type="button">ログアウト</button>
           </div>
         </div>
-      </div>
+      </div>　
+      <!-- 日記 -->
+<div class="card">
+  <h2>日記</h2>
+  <div class="row">
+    <label class="muted">日付</label>
+    <input id="diaryDate" type="date" />
+    <button id="loadDiary" type="button" class="ghost">表示</button>
+  </div>
+
+  <div class="row" style="margin-top:10px">
+    <input id="diaryTitle" type="text" placeholder="タイトル（空なら無題）" style="flex:1;min-width:240px" />
+  </div>
+
+  <div style="margin-top:10px">
+    <textarea id="diaryBody" placeholder="本文" style="width:100%;min-height:120px;resize:vertical"></textarea>
+  </div>
+
+  <div class="row" style="margin-top:10px">
+    <button id="saveDiary" type="button">保存</button>
+    <button id="deleteDiary" type="button" class="sub">削除</button>
+  </div>
+
+  <div class="row" style="margin-top:8px">
+    <div class="muted" id="diaryStatus"></div>
+    <div class="err" id="diaryError"></div>
+  </div>
+
+  <div class="cardSub" style="margin-top:12px">
+    <h2 style="margin:0 0 6px">最近の日記</h2>
+    <ul id="diaryList"></ul>
+  </div>
+</div>
 
       <!-- 右：カレンダー -->
       <div id="calendarWrap">
@@ -253,17 +285,70 @@ async function fetchMonthTodos(y, m){
 function localAIParse(input){
   let s = (input || "").trim();
   const now = new Date();
-  let due = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const today0 = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+  let due = new Date(today0);
   let time = "";
 
-  // 時刻（19時 / 19:30 / 7:00 / 0730）
+  // ---- 時刻（8時 / 8:30 / 08:30 / 20時） ----
+  // ※「4日8時」みたいな連結も拾えるように、まず時刻を取る
   const hm = s.match(/(\d{1,2})(?:時|:)(\d{2})?/);
   if(hm){
     const h = Number(hm[1]);
     const m = hm[2] ? Number(hm[2]) : 0;
-    time = `${pad2(h)}:${pad2(m)}`;
-    s = s.replace(hm[0]," ").trim();
+    if(h >= 0 && h <= 23 && m >= 0 && m <= 59){
+      time = `${pad2(h)}:${pad2(m)}`;
+      s = s.replace(hm[0]," ").trim();
+    }
   }
+
+  // ---- 相対日付 ----
+  if(/明後日/.test(s)){ due.setDate(due.getDate()+2); s = s.replace("明後日"," "); }
+  else if(/明日/.test(s)){ due.setDate(due.getDate()+1); s = s.replace("明日"," "); }
+  else if(/今日/.test(s)){ s = s.replace("今日"," "); }
+
+  // ---- YYYY/MM/DD or YYYY-MM-DD ----
+  let m;
+  if((m = s.match(/(20\d{2})[\/\-](\d{1,2})[\/\-](\d{1,2})/))){
+    due = new Date(+m[1], +m[2]-1, +m[3]);
+    s = s.replace(m[0]," ").trim();
+  }
+  // ---- M/D or M-D ----
+  else if((m = s.match(/(\d{1,2})[\/\-](\d{1,2})/))){
+    let y = now.getFullYear();
+    const cand = new Date(y, +m[1]-1, +m[2]);
+    // 過去なら来年
+    due = (cand < today0) ? new Date(y+1, +m[1]-1, +m[2]) : cand;
+    s = s.replace(m[0]," ").trim();
+  }
+  // ---- 「1月4日」形式 ----
+  else if((m = s.match(/(\d{1,2})月(\d{1,2})日/))){
+    let y = now.getFullYear();
+    const cand = new Date(y, +m[1]-1, +m[2]);
+    due = (cand < today0) ? new Date(y+1, +m[1]-1, +m[2]) : cand;
+    s = s.replace(m[0]," ").trim();
+  }
+  // ---- 「4日」形式（今月の4日。過ぎてたら来月の4日） ----
+  else if((m = s.match(/(\d{1,2})日/))){
+    const day = +m[1];
+    let y = now.getFullYear();
+    let mon = now.getMonth();
+    let cand = new Date(y, mon, day);
+    if(cand < today0){
+      mon += 1;
+      if(mon > 11){ mon = 0; y += 1; }
+      cand = new Date(y, mon, day);
+    }
+    due = cand;
+    s = s.replace(m[0]," ").trim();
+  }
+
+  // ---- タイトル整形 ----
+  let title = s.replace(/\s+/g," ").trim();
+  if(!title) title = "ToDo";
+
+  return { title, due_date: toISO(due), due_time: time };
+}
 
   // 今日/明日/明後日
   if(/明後日/.test(s)){ due.setDate(due.getDate()+2); s = s.replace("明後日"," "); }
@@ -525,7 +610,138 @@ logoutBtn.addEventListener("click", ()=>{
   location.reload();
 });
 
-/* ===== 初期化 ===== */
+/* ===== 初期化 ====/* ===== 日記 ===== */
+const diaryDateEl = document.getElementById("diaryDate");
+const diaryTitleEl = document.getElementById("diaryTitle");
+const diaryBodyEl = document.getElementById("diaryBody");
+const loadDiaryBtn = document.getElementById("loadDiary");
+const saveDiaryBtn = document.getElementById("saveDiary");
+const deleteDiaryBtn = document.getElementById("deleteDiary");
+const diaryStatusEl = document.getElementById("diaryStatus");
+const diaryErrorEl = document.getElementById("diaryError");
+const diaryListEl = document.getElementById("diaryList");
+
+let currentDiaryId = null;
+
+function setDiaryStatus(s){ diaryStatusEl.textContent = s || ""; }
+function setDiaryError(s){ diaryErrorEl.textContent = s || ""; }
+
+async function fetchDiary(dateISO){
+  const { data, error } = await sb
+    .from("diaries")
+    .select("*")
+    .eq("couple_id", COUPLE_ID)
+    .eq("date", dateISO)
+    .order("created_at", { ascending:false })
+    .limit(1);
+
+  if(error) throw error;
+  return (data && data[0]) || null;
+}
+
+async function insertDiary(dateISO, title, body){
+  const { error } = await sb
+    .from("diaries")
+    .insert([{ couple_id: COUPLE_ID, date: dateISO, title, body }]);
+  if(error) throw error;
+}
+
+async function deleteDiaryById(id){
+  const { error } = await sb.from("diaries").delete().eq("id", id);
+  if(error) throw error;
+}
+
+async function listRecentDiaries(){
+  const { data, error } = await sb
+    .from("diaries")
+    .select("*")
+    .eq("couple_id", COUPLE_ID)
+    .order("created_at", { ascending:false })
+    .limit(7);
+  if(error) throw error;
+  return data || [];
+}
+
+async function renderDiaryList(){
+  diaryListEl.innerHTML = "";
+  const items = await listRecentDiaries();
+  items.forEach(it=>{
+    const li = document.createElement("li");
+    li.style.cursor = "pointer";
+    li.innerHTML = `<b>${it.date}</b>：${escapeHtml(it.title || "無題")} <span class="muted">(${new Date(it.created_at).toLocaleString()})</span>`;
+    li.addEventListener("click", ()=>{
+      diaryDateEl.value = it.date;
+      loadDiary();
+    });
+    diaryListEl.appendChild(li);
+  });
+}
+
+async function loadDiary(){
+  const dateISO = diaryDateEl.value || todayISO();
+  diaryDateEl.value = dateISO;
+
+  try{
+    setDiaryError(""); setDiaryStatus("読み込み中…");
+    const d = await fetchDiary(dateISO);
+    if(!d){
+      currentDiaryId = null;
+      diaryTitleEl.value = "";
+      diaryBodyEl.value = "";
+      setDiaryStatus("この日の日記はまだありません。");
+    }else{
+      currentDiaryId = d.id;
+      diaryTitleEl.value = d.title || "";
+      diaryBodyEl.value = d.body || "";
+      setDiaryStatus("読み込みました。");
+    }
+    await renderDiaryList();
+  }catch(err){
+    setDiaryStatus("");
+    setDiaryError("日記エラー：" + (err.message || String(err)));
+  }
+}
+
+async function saveDiary(){
+  const dateISO = diaryDateEl.value || todayISO();
+  diaryDateEl.value = dateISO;
+
+  const title = (diaryTitleEl.value || "").trim() || "無題";
+  const body = (diaryBodyEl.value || "").trim();
+  if(!body){ setDiaryError("本文が空です"); return; }
+
+  try{
+    setDiaryError(""); setDiaryStatus("保存中…");
+    await insertDiary(dateISO, title, body);
+    setDiaryStatus("保存しました。");
+    await loadDiary();
+  }catch(err){
+    setDiaryStatus("");
+    setDiaryError("保存エラー：" + (err.message || String(err)));
+  }
+}
+
+async function deleteDiary(){
+  if(!currentDiaryId){ setDiaryError("削除する日記がありません"); return; }
+  try{
+    setDiaryError(""); setDiaryStatus("削除中…");
+    await deleteDiaryById(currentDiaryId);
+    currentDiaryId = null;
+    diaryTitleEl.value = "";
+    diaryBodyEl.value = "";
+    setDiaryStatus("削除しました。");
+    await renderDiaryList();
+  }catch(err){
+    setDiaryStatus("");
+    setDiaryError("削除エラー：" + (err.message || String(err)));
+  }
+}
+
+loadDiaryBtn.addEventListener("click", loadDiary);
+saveDiaryBtn.addEventListener("click", saveDiary);
+deleteDiaryBtn.addEventListener("click", deleteDiary);
+ */
+  
 (function init(){
   if(!COUPLE_ID){
     loginCard.style.display="block";
@@ -541,6 +757,8 @@ logoutBtn.addEventListener("click", ()=>{
 
   loginCard.style.display="none";
   app.style.display="block";
+  diaryDateEl.value = todayISO();
+renderDiaryList();
 
   renderAnniversary();
 
