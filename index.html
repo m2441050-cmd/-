@@ -69,6 +69,18 @@
 
   <!-- アプリ本体（ログイン後だけ表示） -->
   <div id="app" style="display:none">
+    <!-- ▼ 背景設定（2人で共有） -->
+<div class="card">
+  <h2>背景</h2>
+  <div class="row">
+    <input id="bgUrl" placeholder="画像URL（https://...jpg）" style="flex:1;min-width:220px">
+    <button id="saveBg" type="button">背景を保存</button>
+  </div>
+  <div class="muted" style="margin-top:8px">
+    ※URLを保存すると2人の画面が同じ背景になります（index/diary連動）
+  </div>
+  <div class="err" id="bgErr"></div>
+</div>
 
     <!-- 記念日（27日のみ表示） -->
     <div class="card" id="annivCard" style="display:none">
@@ -232,7 +244,51 @@ function setDiaryError(s){ diaryErrorEl.textContent = s || ""; }
 function escapeHtml(s){
   return (s||"").replace(/[&<>"']/g, (c)=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
 }
+/* ===== 背景（couple_settings） ===== */
+const bgErrEl = document.getElementById("bgErr");
 
+async function loadBackground(){
+  try{
+    // couple_idで1件取得
+    const { data, error } = await sb
+      .from("couple_settings")
+      .select("*")
+      .eq("couple_id", COUPLE_ID)
+      .maybeSingle();
+
+    if(error) throw error;
+
+    if(data && data.background_url){
+      document.body.style.background = `url(${data.background_url}) center/cover fixed`;
+    }else{
+      // 背景未設定ならデフォルト（任意）
+      document.body.style.background = "linear-gradient(160deg,#f6f2ff,#ffffff)";
+    }
+  }catch(err){
+    if(bgErrEl) bgErrEl.textContent = "背景読込エラー：" + (err.message || String(err));
+  }
+}
+
+async function saveBackground(){
+  const input = document.getElementById("bgUrl");
+  const url = (input.value || "").trim();
+  if(!url) return;
+
+  if(bgErrEl) bgErrEl.textContent = "";
+
+  try{
+    const { error } = await sb
+      .from("couple_settings")
+      .upsert({ couple_id: COUPLE_ID, background_url: url });
+
+    if(error) throw error;
+
+    await loadBackground(); // 保存後すぐ反映
+    input.value = "";
+  }catch(err){
+    if(bgErrEl) bgErrEl.textContent = "背景保存エラー：" + (err.message || String(err));
+  }
+}
 /* ===== 記念日（27日のみ表示） ===== */
 function renderAnniversary(){
   const now = new Date();
@@ -700,6 +756,11 @@ deleteDiaryBtn.addEventListener("click", deleteDiary);
 
   loginCard.style.display="none";
   app.style.display="block";
+  // 背景を読み込み
+loadBackground();
+
+// 保存ボタンイベント
+document.getElementById("saveBg").addEventListener("click", saveBackground);
 
   renderAnniversary();
 
