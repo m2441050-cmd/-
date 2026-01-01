@@ -372,3 +372,146 @@
   </script>
 </body>
 </html>
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Couple OS</title>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <style>
+    body{
+      font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans",sans-serif;
+      max-width:900px;margin:40px auto;padding:0 16px;
+      background:linear-gradient(160deg,#f7f3ff,#fff);
+    }
+    h1{font-size:24px}
+    h2{font-size:16px;margin-top:0}
+    .card{background:#fff;border-radius:16px;padding:16px;margin-bottom:16px;box-shadow:0 10px 30px rgba(0,0,0,.05)}
+    .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    input,button{padding:10px;border-radius:10px;border:1px solid #ccc}
+    button{cursor:pointer;background:#7b6cff;color:#fff;border:none}
+    ul{padding-left:18px}
+    li{margin:6px 0}
+    .done{text-decoration:line-through;opacity:.5}
+    .muted{opacity:.6;font-size:13px}
+    .anniv{font-size:18px;color:#d6336c}
+  </style>
+</head>
+
+<body>
+
+<h1>💑 Couple OS</h1>
+
+<!-- 記念日 -->
+<div class="card">
+  <div id="anniversary" class="anniv"></div>
+</div>
+
+<!-- ToDo -->
+<div class="card">
+  <h2>ToDo</h2>
+  <div class="row">
+    <input id="todoText" placeholder="例：明日 ケーキ買う" style="flex:1">
+    <input id="todoDate" type="date">
+    <button id="addTodo">追加</button>
+  </div>
+  <p class="muted">※日付がなければ「今日」扱い</p>
+  <ul id="todoList"></ul>
+</div>
+
+<script>
+/* ===== 設定 ===== */
+const COUPLE_ID = "kentaria";
+const START_DATE = new Date("2025-08-27");
+
+const supabase = window.supabase.createClient(
+  "https://eycneuftjdooykzjbioy.supabase.co",
+  "sb_publishable_ySwVIipmFAvN6VGexnR0PQ_RDsZ4M2Z"
+);
+
+/* ===== 記念日表示 ===== */
+function renderAnniversary(){
+  const today = new Date();
+  if(today.getDate() !== 27) return;
+
+  const diff = Math.floor((today - START_DATE)/86400000);
+  const months =
+    (today.getFullYear()-START_DATE.getFullYear())*12 +
+    (today.getMonth()-START_DATE.getMonth());
+
+  let text = `🎉 付き合って ${months}ヶ月（${diff}日）`;
+  if(diff === 500 || diff === 1000) text += ` 🎊${diff}日記念！`;
+
+  document.getElementById("anniversary").textContent = text;
+}
+
+/* ===== ToDo ===== */
+function todayISO(){
+  const d=new Date();
+  return d.toISOString().slice(0,10);
+}
+
+async function loadTodos(){
+  const today = todayISO();
+
+  const { data } = await supabase
+    .from("todos")
+    .select("*")
+    .eq("couple_id",COUPLE_ID)
+    .order("due_date");
+
+  const ul = document.getElementById("todoList");
+  ul.innerHTML = "";
+
+  data.forEach(t=>{
+    const li=document.createElement("li");
+    const overdue = (!t.done && t.due_date < today);
+    li.className = t.done ? "done":"";
+    li.innerHTML = `
+      <label>
+        <input type="checkbox" ${t.done?"checked":""}>
+        ${t.title}
+        <span class="muted">
+          (${overdue ? "持ち越し" : t.due_date})
+        </span>
+      </label>
+    `;
+    li.querySelector("input").onchange=async e=>{
+      await supabase.from("todos")
+        .update({done:e.target.checked})
+        .eq("id",t.id);
+      loadTodos();
+    };
+    ul.appendChild(li);
+  });
+}
+
+document.getElementById("addTodo").onclick=async ()=>{
+  const text=document.getElementById("todoText").value.trim();
+  if(!text) return;
+
+  const dateInput=document.getElementById("todoDate").value;
+  const due = dateInput || todayISO();
+
+  await supabase.from("todos").insert([{
+    couple_id:COUPLE_ID,
+    title:text,
+    due_date:due,
+    done:false
+  }]);
+
+  document.getElementById("todoText").value="";
+  document.getElementById("todoDate").value="";
+  loadTodos();
+};
+
+/* ===== init ===== */
+renderAnniversary();
+loadTodos();
+</script>
+
+</body>
+</html>
