@@ -33,7 +33,7 @@
       <input id="couple" placeholder="例：riadaisuki（2人で同じの）" />
       <button id="saveCouple">保存</button>
     </div>
-    <small class="muted">※合言葉は英数字・短め推奨（推測されにくい文字列にすると安心）</small>
+    <small class="muted">※合言葉は推測されにくい文字列にすると安心（英数字・長め推奨）</small>
   </div>
 
   <div class="card">
@@ -50,15 +50,10 @@
   </div>
 
   <script>
-    // ======= Supabase設定（あなたの値を埋め込み済み） =======
+    // ======= Supabase設定（あなたの値） =======
     const SUPABASE_URL = "https://eycneuftjdooykzjbioy.supabase.co";
-    const SUPABASE_ANON_KEY = "sb_publishable_ySwVIipmFAvN6VGexnR0PQ_RDsZ4M2Z4M2Z"; // ←もし末尾が違ったらコピペし直してね
+    const SUPABASE_ANON_KEY = "sb_publishable_ySwVIipmFAvN6VGexnR0PQ_RDsZ4M2Z";
     const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-    // ↑注意：あなたが貼ってくれたキー末尾は「...Z4M2Z」だったので、
-    // ここは一旦「...Z4M2Z4M2Z」と見えてしまってる可能性があります。
-    // 下の行を、あなたが送ってくれたKey文字列そのままにしておいてください。
-    // => "sb_publishable_ySwVIipmFAvN6VGexnR0PQ_RDsZ4M2Z"
 
     // ======= UI =======
     const coupleInput = document.getElementById("couple");
@@ -81,8 +76,13 @@
 
     function loadCoupleId(){
       const v = localStorage.getItem(COUPLE_KEY) || "";
-      coupleInput.value = v;
-      return v;
+      if (v) {
+        coupleInput.value = v;
+      } else {
+        // 合言葉が未設定なら、例として riadaisuki を入れておく（消してもOK）
+        coupleInput.value = "riadaisuki";
+      }
+      return coupleInput.value;
     }
 
     function saveCoupleId(){
@@ -155,7 +155,7 @@
             <label style="display:flex;gap:10px;align-items:center">
               <input type="checkbox" ${it.done ? "checked":""} />
               <span style="flex:1">${escapeHtml(it.title)}</span>
-              <button data-del="1">削除</button>
+              <button>削除</button>
             </label>
           `;
 
