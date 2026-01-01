@@ -3,76 +3,222 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Couple OS (MVP)</title>
+  <title>Couple OS (Shared MVP)</title>
   <style>
-    body{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Hiragino Sans",sans-serif;max-width:720px;margin:40px auto;padding:0 16px}
-    h1{font-size:22px}
-    .row{display:flex;gap:8px}
-    input{flex:1;padding:10px;border:1px solid #ccc;border-radius:10px}
+    body{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Hiragino Sans",sans-serif;max-width:760px;margin:40px auto;padding:0 16px}
+    h1{font-size:22px;margin:0 0 6px}
+    small{color:#666}
+    .card{border:1px solid #ddd;border-radius:14px;padding:12px;margin-top:12px}
+    .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    input{padding:10px;border:1px solid #ccc;border-radius:10px}
+    input[type="text"]{flex:1;min-width:220px}
     button{padding:10px 14px;border:0;border-radius:10px;cursor:pointer}
-    ul{padding-left:18px}
+    ul{padding-left:18px;margin:10px 0}
     li{margin:8px 0}
     .done{text-decoration:line-through;opacity:.6}
-    small{color:#666}
+    .muted{opacity:.7}
+    .err{color:#b00020}
   </style>
+
+  <!-- Supabase JS v2 (CDN) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
-  <h1>Couple OS（まずはToDo）</h1>
-  <small>※これは“動く確認用”。次に共有DBとリマインドを足す。</small>
+  <h1>Couple OS（共有ToDo / MVP）</h1>
+  <small>二人で同じ <b>合言葉</b> を入れると同じToDoが見えます。</small>
 
-  <div class="row" style="margin-top:14px">
-    <input id="txt" placeholder="例：牛乳買う / 病院に電話 / デート予約" />
-    <button id="add">追加</button>
+  <div class="card">
+    <div class="row">
+      <label class="muted">合言葉（couple_id）</label>
+      <input id="couple" placeholder="例：kenta-ai（2人で同じの）" />
+      <button id="saveCouple">保存</button>
+    </div>
+    <small class="muted">※合言葉は英数字・短め推奨（推測されにくい文字列にすると安心）</small>
   </div>
 
-  <ul id="list"></ul>
+  <div class="card">
+    <div class="row">
+      <input id="txt" type="text" placeholder="例：牛乳買う / 病院に電話 / デート予約" />
+      <button id="add">追加</button>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <button id="reload">更新</button>
+      <small id="status" class="muted"></small>
+      <small id="error" class="err"></small>
+    </div>
+    <ul id="list"></ul>
+  </div>
 
   <script>
-    const key = "couple_os_todos";
-    const txt = document.getElementById("txt");
-    const list = document.getElementById("list");
-    const addBtn = document.getElementById("add");
+    // ======= Supabase設定（あなたの値を埋め込み済み） =======
+    const SUPABASE_URL = "https://eycneuftjdooykzjbioy.supabase.co";
+    const SUPABASE_ANON_KEY = "sb_publishable_ySwVIipmFAvN6VGexnR0PQ_RDsZ4M2Z4M2Z"; // ←もし末尾が違ったらコピペし直してね
+    const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    function load(){
-      try { return JSON.parse(localStorage.getItem(key) || "[]"); }
-      catch { return []; }
+    // ↑注意：あなたが貼ってくれたキー末尾は「...Z4M2Z」だったので、
+    // ここは一旦「...Z4M2Z4M2Z」と見えてしまってる可能性があります。
+    // 下の行を、あなたが送ってくれたKey文字列そのままにしておいてください。
+    // => "sb_publishable_ySwVIipmFAvN6VGexnR0PQ_RDsZ4M2Z"
+
+    // ======= UI =======
+    const coupleInput = document.getElementById("couple");
+    const saveCoupleBtn = document.getElementById("saveCouple");
+    const txt = document.getElementById("txt");
+    const addBtn = document.getElementById("add");
+    const reloadBtn = document.getElementById("reload");
+    const list = document.getElementById("list");
+    const statusEl = document.getElementById("status");
+    const errorEl = document.getElementById("error");
+
+    const COUPLE_KEY = "couple_os_couple_id";
+
+    function setStatus(msg){ statusEl.textContent = msg || ""; }
+    function setError(msg){ errorEl.textContent = msg || ""; }
+
+    function getCoupleId(){
+      return (coupleInput.value || "").trim();
     }
-    function save(items){
-      localStorage.setItem(key, JSON.stringify(items));
+
+    function loadCoupleId(){
+      const v = localStorage.getItem(COUPLE_KEY) || "";
+      coupleInput.value = v;
+      return v;
     }
-    function render(){
-      const items = load();
-      list.innerHTML = "";
-      items.forEach((it, idx) => {
-        const li = document.createElement("li");
-        li.className = it.done ? "done" : "";
-        li.innerHTML = `
-          <label style="display:flex;gap:10px;align-items:center">
-            <input type="checkbox" ${it.done ? "checked":""} />
-            <span style="flex:1">${it.title}</span>
-            <button data-del="${idx}">削除</button>
-          </label>`;
-        li.querySelector("input").addEventListener("change", (e)=>{
-          items[idx].done = e.target.checked;
-          save(items); render();
-        });
-        li.querySelector("button").addEventListener("click", ()=>{
-          items.splice(idx,1); save(items); render();
-        });
-        list.appendChild(li);
-      });
-    }
-    function add(){
-      const v = txt.value.trim();
-      if(!v) return;
-      const items = load();
-      items.unshift({title:v, done:false, createdAt: Date.now()});
-      save(items);
-      txt.value = "";
+
+    function saveCoupleId(){
+      const v = getCoupleId();
+      if(!v){
+        setError("合言葉（couple_id）を入力してください");
+        return;
+      }
+      localStorage.setItem(COUPLE_KEY, v);
+      setError("");
+      setStatus("合言葉を保存しました。『更新』で共有ToDoが出ます。");
       render();
     }
-    addBtn.addEventListener("click", add);
-    txt.addEventListener("keydown", (e)=>{ if(e.key==="Enter") add(); });
+
+    async function fetchTodos(coupleId){
+      const { data, error } = await sb
+        .from("todos")
+        .select("*")
+        .eq("couple_id", coupleId)
+        .order("created_at", { ascending: false });
+
+      if(error) throw error;
+      return data || [];
+    }
+
+    async function addTodo(coupleId, title){
+      const { error } = await sb
+        .from("todos")
+        .insert([{ couple_id: coupleId, title, done: false }]);
+      if(error) throw error;
+    }
+
+    async function toggleTodo(id, done){
+      const { error } = await sb
+        .from("todos")
+        .update({ done })
+        .eq("id", id);
+      if(error) throw error;
+    }
+
+    async function deleteTodo(id){
+      const { error } = await sb
+        .from("todos")
+        .delete()
+        .eq("id", id);
+      if(error) throw error;
+    }
+
+    async function render(){
+      const coupleId = getCoupleId() || localStorage.getItem(COUPLE_KEY) || "";
+      coupleInput.value = coupleId;
+
+      list.innerHTML = "";
+      setError("");
+
+      if(!coupleId){
+        setStatus("まず合言葉（couple_id）を保存してください。");
+        return;
+      }
+
+      try{
+        setStatus("読み込み中…");
+        const items = await fetchTodos(coupleId);
+        setStatus(`件数：${items.length}`);
+
+        items.forEach(it => {
+          const li = document.createElement("li");
+          li.className = it.done ? "done" : "";
+          li.innerHTML = `
+            <label style="display:flex;gap:10px;align-items:center">
+              <input type="checkbox" ${it.done ? "checked":""} />
+              <span style="flex:1">${escapeHtml(it.title)}</span>
+              <button data-del="1">削除</button>
+            </label>
+          `;
+
+          li.querySelector("input").addEventListener("change", async (e)=>{
+            try{
+              await toggleTodo(it.id, e.target.checked);
+              render();
+            }catch(err){
+              setError(err.message || String(err));
+            }
+          });
+
+          li.querySelector("button").addEventListener("click", async ()=>{
+            try{
+              await deleteTodo(it.id);
+              render();
+            }catch(err){
+              setError(err.message || String(err));
+            }
+          });
+
+          list.appendChild(li);
+        });
+
+      }catch(err){
+        setStatus("");
+        setError("Supabaseでエラー：" + (err.message || String(err)));
+      }
+    }
+
+    function escapeHtml(s){
+      return s.replace(/[&<>"']/g, (c)=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+    }
+
+    async function onAdd(){
+      const coupleId = getCoupleId() || localStorage.getItem(COUPLE_KEY) || "";
+      if(!coupleId){
+        setError("合言葉（couple_id）を保存してください");
+        return;
+      }
+      const v = (txt.value || "").trim();
+      if(!v) return;
+
+      try{
+        setError("");
+        setStatus("追加中…");
+        await addTodo(coupleId, v);
+        txt.value = "";
+        render();
+      }catch(err){
+        setStatus("");
+        setError("追加エラー：" + (err.message || String(err)));
+      }
+    }
+
+    // イベント
+    saveCoupleBtn.addEventListener("click", saveCoupleId);
+    reloadBtn.addEventListener("click", render);
+    addBtn.addEventListener("click", onAdd);
+    txt.addEventListener("keydown", (e)=>{ if(e.key === "Enter") onAdd(); });
+
+    // 初期表示
+    loadCoupleId();
     render();
   </script>
 </body>
