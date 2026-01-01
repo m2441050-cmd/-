@@ -1,70 +1,69 @@
 <!doctype html>
 <html lang="ja">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Couple OS</title>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<style>
-  body{
-    font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans",sans-serif;
-    max-width:1080px;margin:28px auto;padding:0 16px;
-    background:linear-gradient(160deg,#f6f2ff,#ffffff);
-  }
-  h1{font-size:26px;margin:0 0 6px}
-  h2{font-size:16px;margin:0 0 10px}
-  .muted{opacity:.7;font-size:13px}
-  .err{color:#b00020;font-size:13px}
-  .card{
-    background:#fff;border-radius:18px;padding:16px;margin:14px 0;
-    box-shadow:0 12px 30px rgba(0,0,0,.06);
-  }
-  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-  input,button,textarea{
-    padding:10px 12px;border-radius:10px;border:1px solid #ccc;
-    font-size:14px;
-  }
-  button{cursor:pointer;background:#7b6cff;color:#fff;border:none}
-  button.sub{background:#aaa}
-  button.ghost{background:#fff;color:#333;border:1px solid #ddd}
-  .grid{display:grid;grid-template-columns:1fr;gap:14px}
-  @media (min-width:980px){ .grid{grid-template-columns:1fr 1fr} }
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Couple OS</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    body{
+      font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans",sans-serif;
+      max-width:1080px;margin:28px auto;padding:0 16px;
+      background:linear-gradient(160deg,#f6f2ff,#ffffff);
+    }
+    h1{font-size:26px;margin:0 0 6px}
+    h2{font-size:16px;margin:0 0 10px}
+    .muted{opacity:.7;font-size:13px}
+    .err{color:#b00020;font-size:13px}
+    .card{
+      background:#fff;border-radius:18px;padding:16px;margin:14px 0;
+      box-shadow:0 12px 30px rgba(0,0,0,.06);
+    }
+    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+    input,button,textarea{
+      padding:10px 12px;border-radius:10px;border:1px solid #ccc;font-size:14px;
+    }
+    button{cursor:pointer;background:#7b6cff;color:#fff;border:none}
+    button.sub{background:#aaa}
+    button.ghost{background:#fff;color:#333;border:1px solid #ddd}
+    .grid{display:grid;grid-template-columns:1fr;gap:14px}
+    @media (min-width:980px){ .grid{grid-template-columns:1fr 1fr} }
 
-  /* Calendar */
-  #calendarWrap{position:sticky;top:10px}
-  #calendarGrid{display:grid;grid-template-columns:repeat(7,1fr);gap:8px}
-  .calHead{font-size:12px;opacity:.6;text-align:center}
-  .calCell{
-    border:1px solid #eee;border-radius:12px;padding:10px;min-height:76px;
-    cursor:pointer;background:#fff;
-  }
-  .calCell:hover{box-shadow:0 6px 18px rgba(0,0,0,.06)}
-  .calToday{border-color:rgba(123,108,255,.7)}
-  .calSelected{outline:2px solid rgba(123,108,255,.7)}
-  .calNum{font-weight:700;font-size:12px}
-  .calMeta{margin-top:6px;font-size:12px;opacity:.75}
-  .dots{margin-top:8px;display:flex;gap:4px;flex-wrap:wrap}
-  .dot{width:8px;height:8px;border-radius:999px;background:#7b6cff;opacity:.85}
+    #calendarWrap{position:sticky;top:10px}
+    #calendarGrid{display:grid;grid-template-columns:repeat(7,1fr);gap:8px}
+    .calHead{font-size:12px;opacity:.6;text-align:center}
+    .calCell{
+      border:1px solid #eee;border-radius:12px;padding:10px;min-height:76px;
+      cursor:pointer;background:#fff;
+    }
+    .calCell:hover{box-shadow:0 6px 18px rgba(0,0,0,.06)}
+    .calToday{border-color:rgba(123,108,255,.7)}
+    .calSelected{outline:2px solid rgba(123,108,255,.7)}
+    .calNum{font-weight:700;font-size:12px}
+    .calMeta{margin-top:6px;font-size:12px;opacity:.75}
+    .dots{margin-top:8px;display:flex;gap:4px;flex-wrap:wrap}
+    .dot{width:8px;height:8px;border-radius:999px;background:#7b6cff;opacity:.85}
 
-  ul{padding-left:18px;margin:8px 0}
-  li{margin:6px 0}
-  .done{text-decoration:line-through;opacity:.55}
-  .anniv{font-size:18px;color:#d6336c}
-</style>
+    ul{padding-left:18px;margin:8px 0}
+    li{margin:6px 0}
+    .done{text-decoration:line-through;opacity:.55}
+    .anniv{font-size:18px;color:#d6336c}
+  </style>
 </head>
 
 <body>
   <h1>💑 Couple OS</h1>
   <div class="muted">カップルの生活をひとつに</div>
 
-  <!-- 合言葉（初回だけ表示） -->
+  <!-- ログイン（初回だけ表示） -->
   <div class="card" id="loginCard" style="display:none">
-    <h2>共有ID（合言葉）</h2>
+    <h2>共有ID</h2>
     <div class="row">
-      <input id="coupleInput" placeholder="例：kentaria" style="flex:1;min-width:220px" />
-      <button id="saveCouple">保存</button>
+      <input id="coupleInput" placeholder="kentaria" style="flex:1;min-width:220px" />
+      <button id="saveCouple" type="button">保存</button>
+      <button id="clearCouple" type="button" class="ghost">リセット</button>
     </div>
-    <div class="muted">※一度保存したら、ログアウトするまで表示されません。</div>
+    <div class="muted">※一度保存したら、ログアウト（リセット）するまで表示されません。</div>
     <div class="err" id="loginErr"></div>
   </div>
 
@@ -77,18 +76,18 @@
     </div>
 
     <div class="grid">
-      <!-- 左：ToDo -->
+      <!-- 左：ToDo＋日記 -->
       <div>
         <div class="card">
           <h2>ToDo</h2>
           <div class="row">
-            <input id="txt" placeholder="例：明日 19時 ケーキ買う / 1/5 病院に電話" style="flex:1;min-width:240px" />
+            <input id="txt" placeholder="例：4日8時 お土産買う / 明日 19時 ケーキ買う" style="flex:1;min-width:240px" />
             <input id="dueDate" type="date" />
             <input id="dueTime" type="time" />
-            <button id="ai">整形</button>
-            <button id="add">追加</button>
+            <button id="ai" type="button">整形</button>
+            <button id="add" type="button">追加</button>
           </div>
-          <div class="muted" style="margin-top:8px">※日付が空なら「今日」。整形で日付/時間を拾います。</div>
+          <div class="muted" style="margin-top:8px">※日付が空なら、入力文から拾います（整形を押さなくてもOK）。</div>
           <div class="row" style="margin-top:10px">
             <div class="muted" id="status"></div>
             <div class="err" id="error"></div>
@@ -101,44 +100,32 @@
         </div>
 
         <div class="card">
-          <div class="row" style="justify-content:space-between">
-            <div class="muted">必要ならログアウトできます</div>
-            <button id="logout" class="ghost" type="button">ログアウト</button>
+          <h2>日記</h2>
+          <div class="row">
+            <label class="muted">日付</label>
+            <input id="diaryDate" type="date" />
+            <button id="loadDiary" type="button" class="ghost">表示</button>
+          </div>
+          <div class="row" style="margin-top:10px">
+            <input id="diaryTitle" type="text" placeholder="タイトル（空なら無題）" style="flex:1;min-width:240px" />
+          </div>
+          <div style="margin-top:10px">
+            <textarea id="diaryBody" placeholder="本文" style="width:100%;min-height:120px;resize:vertical"></textarea>
+          </div>
+          <div class="row" style="margin-top:10px">
+            <button id="saveDiary" type="button">保存</button>
+            <button id="deleteDiary" type="button" class="sub">削除</button>
+          </div>
+          <div class="row" style="margin-top:8px">
+            <div class="muted" id="diaryStatus"></div>
+            <div class="err" id="diaryError"></div>
+          </div>
+          <div class="card" style="box-shadow:none;border:1px solid #eee;margin-top:12px">
+            <h2 style="margin:0 0 6px">最近の日記</h2>
+            <ul id="diaryList"></ul>
           </div>
         </div>
-      </div>　
-      <!-- 日記 -->
-<div class="card">
-  <h2>日記</h2>
-  <div class="row">
-    <label class="muted">日付</label>
-    <input id="diaryDate" type="date" />
-    <button id="loadDiary" type="button" class="ghost">表示</button>
-  </div>
-
-  <div class="row" style="margin-top:10px">
-    <input id="diaryTitle" type="text" placeholder="タイトル（空なら無題）" style="flex:1;min-width:240px" />
-  </div>
-
-  <div style="margin-top:10px">
-    <textarea id="diaryBody" placeholder="本文" style="width:100%;min-height:120px;resize:vertical"></textarea>
-  </div>
-
-  <div class="row" style="margin-top:10px">
-    <button id="saveDiary" type="button">保存</button>
-    <button id="deleteDiary" type="button" class="sub">削除</button>
-  </div>
-
-  <div class="row" style="margin-top:8px">
-    <div class="muted" id="diaryStatus"></div>
-    <div class="err" id="diaryError"></div>
-  </div>
-
-  <div class="cardSub" style="margin-top:12px">
-    <h2 style="margin:0 0 6px">最近の日記</h2>
-    <ul id="diaryList"></ul>
-  </div>
-</div>
+      </div>
 
       <!-- 右：カレンダー -->
       <div id="calendarWrap">
@@ -157,17 +144,24 @@
           </div>
           <div id="calendarGrid" style="margin-top:10px"></div>
         </div>
+
+        <div class="card">
+          <div class="row" style="justify-content:space-between">
+            <div class="muted">ログイン解除したい時</div>
+            <button id="logout" class="ghost" type="button">ログアウト</button>
+          </div>
+        </div>
       </div>
     </div>
   </div>
 
 <script>
-/* ===== 設定 ===== */
+/* ===== Supabase ===== */
 const SUPABASE_URL = "https://eycneuftjdooykzjbioy.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_ySwVIipmFAvN6VGexnR0PQ_RDsZ4M2Z";
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-// 付き合った日
+/* ===== 記念日基準 ===== */
 const START_DATE = new Date("2025-08-27T00:00:00");
 
 /* ===== DOM ===== */
@@ -175,6 +169,7 @@ const loginCard = document.getElementById("loginCard");
 const app = document.getElementById("app");
 const coupleInput = document.getElementById("coupleInput");
 const saveCouple = document.getElementById("saveCouple");
+const clearCouple = document.getElementById("clearCouple");
 const loginErr = document.getElementById("loginErr");
 
 const annivCard = document.getElementById("annivCard");
@@ -199,11 +194,23 @@ const nextBtn = document.getElementById("next");
 const thisMonthBtn = document.getElementById("thisMonth");
 const logoutBtn = document.getElementById("logout");
 
+/* 日記DOM */
+const diaryDateEl = document.getElementById("diaryDate");
+const diaryTitleEl = document.getElementById("diaryTitle");
+const diaryBodyEl = document.getElementById("diaryBody");
+const loadDiaryBtn = document.getElementById("loadDiary");
+const saveDiaryBtn = document.getElementById("saveDiary");
+const deleteDiaryBtn = document.getElementById("deleteDiary");
+const diaryStatusEl = document.getElementById("diaryStatus");
+const diaryErrorEl = document.getElementById("diaryError");
+const diaryListEl = document.getElementById("diaryList");
+
 /* ===== 状態 ===== */
 let COUPLE_ID = localStorage.getItem("couple_id") || "";
-let viewYear, viewMonth; // 表示中の年月
-let selectedISO = "";   // 選択日
-let monthTodos = [];    // 月のToDo
+let viewYear, viewMonth;
+let selectedISO = "";
+let monthTodos = [];
+let currentDiaryId = null;
 
 /* ===== utils ===== */
 const pad2 = (n)=> String(n).padStart(2,"0");
@@ -213,6 +220,8 @@ const fromISO = (s)=> { const [y,m,d]=s.split("-").map(Number); return new Date(
 
 function setStatus(s){ statusEl.textContent = s || ""; }
 function setError(s){ errorEl.textContent = s || ""; }
+function setDiaryStatus(s){ diaryStatusEl.textContent = s || ""; }
+function setDiaryError(s){ diaryErrorEl.textContent = s || ""; }
 
 function escapeHtml(s){
   return (s||"").replace(/[&<>"']/g, (c)=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
@@ -227,18 +236,15 @@ function renderAnniversary(){
   }
   const days = Math.floor((new Date(now.getFullYear(),now.getMonth(),now.getDate()) - START_DATE) / 86400000);
 
-  // 年/月の計算（「日が足りない月」は繰り下げ）
   let years = now.getFullYear() - START_DATE.getFullYear();
   let months = now.getMonth() - START_DATE.getMonth();
   if(months < 0){ years -= 1; months += 12; }
 
-  // 27日固定なので日繰り下げは本来起きにくいが保険
   if(now.getDate() < START_DATE.getDate()){
     months -= 1;
     if(months < 0){ months = 11; years -= 1; }
   }
 
-  // 節目：500/1000/1500/2000...
   const milestones = [500,1000,1500,2000,2500,3000];
   const isMilestone = milestones.includes(days);
 
@@ -248,7 +254,7 @@ function renderAnniversary(){
   annivCard.style.display="block";
 }
 
-/* ===== 「未完了は翌日に持ち越し」 ===== */
+/* ===== 持ち越し（未完了の過去日→今日） ===== */
 async function carryOverOverdue(){
   const today = todayISO();
   const { error } = await sb
@@ -257,31 +263,26 @@ async function carryOverOverdue(){
     .eq("couple_id", COUPLE_ID)
     .eq("done", false)
     .lt("due_date", today);
-
   if(error) throw error;
 }
 
-/* ===== 月のToDo取得 ===== */
+/* ===== 月ToDo取得 ===== */
 async function fetchMonthTodos(y, m){
   const start = new Date(y, m, 1);
   const end = new Date(y, m+1, 0);
-  const startISO = toISO(start);
-  const endISO = toISO(end);
-
   const { data, error } = await sb
     .from("todos")
     .select("*")
     .eq("couple_id", COUPLE_ID)
-    .gte("due_date", startISO)
-    .lte("due_date", endISO)
+    .gte("due_date", toISO(start))
+    .lte("due_date", toISO(end))
     .order("due_date", { ascending:true })
     .order("created_at", { ascending:false });
-
   if(error) throw error;
   return data || [];
 }
 
-/* ===== AI整形（ローカル：日付＋時間） ===== */
+/* ===== ローカルAI：日付＋時間（4日8時対応） ===== */
 function localAIParse(input){
   let s = (input || "").trim();
   const now = new Date();
@@ -289,92 +290,43 @@ function localAIParse(input){
 
   let due = new Date(today0);
   let time = "";
-
-  // --- 時刻（4日8時 みたいな連結も拾う）---
-  // 例: "8時", "8:30", "08:30"
   let m;
+
+  // 時刻
   if((m = s.match(/(\d{1,2})(?:時|:)(\d{2})?/))){
     const h = Number(m[1]);
     const mm = m[2] ? Number(m[2]) : 0;
     if(h>=0 && h<=23 && mm>=0 && mm<=59){
-      time = `${String(h).padStart(2,"0")}:${String(mm).padStart(2,"0")}`;
+      time = `${pad2(h)}:${pad2(mm)}`;
       s = s.replace(m[0], " ").trim();
     }
   }
 
-  // --- 相対 ---
+  // 相対
   if(/明後日/.test(s)){ due.setDate(due.getDate()+2); s = s.replace("明後日"," "); }
   else if(/明日/.test(s)){ due.setDate(due.getDate()+1); s = s.replace("明日"," "); }
   else if(/今日/.test(s)){ s = s.replace("今日"," "); }
 
-  // --- 年月日 ---
+  // 年月日
   if((m = s.match(/(20\d{2})[\/\-](\d{1,2})[\/\-](\d{1,2})/))){
     due = new Date(+m[1], +m[2]-1, +m[3]);
     s = s.replace(m[0]," ").trim();
   }
-  // --- 月日 ---
+  // 月日
   else if((m = s.match(/(\d{1,2})[\/\-](\d{1,2})/))){
     let y = now.getFullYear();
     const cand = new Date(y, +m[1]-1, +m[2]);
     due = (cand < today0) ? new Date(y+1, +m[1]-1, +m[2]) : cand;
     s = s.replace(m[0]," ").trim();
   }
-  // --- 「1月4日」 ---
+  // 「1月4日」
   else if((m = s.match(/(\d{1,2})月(\d{1,2})日/))){
     let y = now.getFullYear();
     const cand = new Date(y, +m[1]-1, +m[2]);
     due = (cand < today0) ? new Date(y+1, +m[1]-1, +m[2]) : cand;
     s = s.replace(m[0]," ").trim();
   }
-  // --- 「4日」ここが今回の肝 ---
-  else if((m = s.match(/(\d{1,2})日/))){
-    const day = +m[1];
-    let y = now.getFullYear();
-    let mon = now.getMonth();
-    let cand = new Date(y, mon, day);
-
-    // その日が今日より前なら来月へ
-    if(cand < today0){
-      mon += 1;
-      if(mon > 11){ mon = 0; y += 1; }
-      cand = new Date(y, mon, day);
-    }
-    due = cand;
-    s = s.replace(m[0]," ").trim();
-  }
-
-  let title = s.replace(/\s+/g," ").trim();
-  if(!title) title = "ToDo";
-  return { title, due_date: toISO(due), due_time: time };
-}
-
-  // ---- 相対日付 ----
-  if(/明後日/.test(s)){ due.setDate(due.getDate()+2); s = s.replace("明後日"," "); }
-  else if(/明日/.test(s)){ due.setDate(due.getDate()+1); s = s.replace("明日"," "); }
-  else if(/今日/.test(s)){ s = s.replace("今日"," "); }
-
-  // ---- YYYY/MM/DD or YYYY-MM-DD ----
-  let m;
-  if((m = s.match(/(20\d{2})[\/\-](\d{1,2})[\/\-](\d{1,2})/))){
-    due = new Date(+m[1], +m[2]-1, +m[3]);
-    s = s.replace(m[0]," ").trim();
-  }
-  // ---- M/D or M-D ----
-  else if((m = s.match(/(\d{1,2})[\/\-](\d{1,2})/))){
-    let y = now.getFullYear();
-    const cand = new Date(y, +m[1]-1, +m[2]);
-    // 過去なら来年
-    due = (cand < today0) ? new Date(y+1, +m[1]-1, +m[2]) : cand;
-    s = s.replace(m[0]," ").trim();
-  }
-  // ---- 「1月4日」形式 ----
-  else if((m = s.match(/(\d{1,2})月(\d{1,2})日/))){
-    let y = now.getFullYear();
-    const cand = new Date(y, +m[1]-1, +m[2]);
-    due = (cand < today0) ? new Date(y+1, +m[1]-1, +m[2]) : cand;
-    s = s.replace(m[0]," ").trim();
-  }
-  // ---- 「4日」形式（今月の4日。過ぎてたら来月の4日） ----
+  // 「4日」
   else if((m = s.match(/(\d{1,2})日/))){
     const day = +m[1];
     let y = now.getFullYear();
@@ -389,45 +341,12 @@ function localAIParse(input){
     s = s.replace(m[0]," ").trim();
   }
 
-  // ---- タイトル整形 ----
   let title = s.replace(/\s+/g," ").trim();
   if(!title) title = "ToDo";
-
   return { title, due_date: toISO(due), due_time: time };
 }
 
-  // 今日/明日/明後日
-  if(/明後日/.test(s)){ due.setDate(due.getDate()+2); s = s.replace("明後日"," "); }
-  else if(/明日/.test(s)){ due.setDate(due.getDate()+1); s = s.replace("明日"," "); }
-  else if(/今日/.test(s)){ s = s.replace("今日"," "); }
-
-  // YYYY/MM/DD or YYYY-MM-DD
-  const ymd = s.match(/(20\d{2})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
-  if(ymd){
-    due = new Date(+ymd[1], +ymd[2]-1, +ymd[3]);
-    s = s.replace(ymd[0]," ").trim();
-  } else {
-    // M/D or M-D（過去なら来年）
-    const md = s.match(/(\d{1,2})[\/\-](\d{1,2})/);
-    if(md){
-      const m = +md[1], d = +md[2];
-      let y = now.getFullYear();
-      let cand = new Date(y, m-1, d);
-      const today = new Date(now.getFullYear(),now.getMonth(),now.getDate());
-      if(cand < today) cand = new Date(y+1, m-1, d);
-      due = cand;
-      s = s.replace(md[0]," ").trim();
-    }
-  }
-
-  // タイトル整形
-  let title = s.replace(/\s+/g," ").trim();
-  if(!title) title = "ToDo";
-
-  return { title, due_date: toISO(due), due_time: time };
-}
-
-/* ===== UI描画 ===== */
+/* ===== カレンダー描画 ===== */
 function groupByDate(todos){
   const map = new Map();
   for(const t of todos){
@@ -439,8 +358,6 @@ function groupByDate(todos){
 
 function buildCalendar(){
   calendarGridEl.innerHTML = "";
-
-  // ヘッダ
   ["日","月","火","水","木","金","土"].forEach(h=>{
     const el = document.createElement("div");
     el.className="calHead";
@@ -457,10 +374,7 @@ function buildCalendar(){
   const byDate = groupByDate(monthTodos);
   const tISO = todayISO();
 
-  // 空白
-  for(let i=0;i<startDow;i++){
-    calendarGridEl.appendChild(document.createElement("div"));
-  }
+  for(let i=0;i<startDow;i++) calendarGridEl.appendChild(document.createElement("div"));
 
   for(let day=1; day<=daysInMonth; day++){
     const iso = `${viewYear}-${pad2(viewMonth+1)}-${pad2(day)}`;
@@ -517,7 +431,6 @@ function renderDayList(){
   items.forEach(t=>{
     const li = document.createElement("li");
     li.className = t.done ? "done" : "";
-
     const time = (t.due_time || "").trim();
     const timeLabel = time ? `（${time}）` : "";
 
@@ -547,15 +460,12 @@ function renderDayList(){
   });
 }
 
-/* ===== メイン同期 ===== */
 async function reloadMonth(){
   setError("");
   try{
     setStatus("同期中…");
     await carryOverOverdue();
-
     monthTodos = await fetchMonthTodos(viewYear, viewMonth);
-
     setStatus("OK");
     buildCalendar();
     renderDayList();
@@ -565,118 +475,7 @@ async function reloadMonth(){
   }
 }
 
-/* ===== イベント ===== */
-aiBtn.addEventListener("click", ()=>{
-  const raw = (txtEl.value || "").trim();
-  if(!raw) return;
-  const p = localAIParse(raw);
-  txtEl.value = p.title;
-  dueDateEl.value = p.due_date;
-  dueTimeEl.value = p.due_time;
-  selectedISO = p.due_date;
-  // 表示月も合わせる
-  const d = fromISO(p.due_date);
-  viewYear = d.getFullYear();
-  viewMonth = d.getMonth();
-  reloadMonth();
-});
-
-addBtn.addEventListener("click", async ()=>{
-  const raw = (txtEl.value || "").trim();
-  if(!raw){ setError("ToDoが空です"); return; }
-
-  // 入力欄の日付/時間
-  let due = dueDateEl.value || "";
-  let time = dueTimeEl.value || "";
-
-  // ★ ここで必ずAI解析（整形押し忘れ対策）
-  const p = localAIParse(raw);
-
-  // 日付欄が空ならAIの結果を採用
-  if(!due) due = p.due_date;
-  // 時刻欄が空ならAIの結果を採用
-  if(!time) time = p.due_time;
-
-  // タイトルはAI整形のものを基本採用（余計な日付/時刻が残らない）
-  const title = p.title;
-
-  setError("");
-  try{
-    setStatus("追加中…");
-    const { error } = await sb.from("todos").insert([{
-      couple_id: COUPLE_ID,
-      title,
-      due_date: due,
-      due_time: time || null,
-      done: false
-    }]);
-    if(error) throw error;
-
-    // 入力欄クリア
-    txtEl.value = "";
-    dueTimeEl.value = "";
-    // 選択日を追加した日に合わせる
-    selectedISO = due;
-    dueDateEl.value = due;
-
-    const d = fromISO(due);
-    viewYear = d.getFullYear();
-    viewMonth = d.getMonth();
-
-    await reloadMonth();
-  }catch(err){
-    setStatus("");
-    setError(err.message || String(err));
-  }
-});
-
-prevBtn.addEventListener("click", async ()=>{
-  viewMonth -= 1;
-  if(viewMonth < 0){ viewMonth = 11; viewYear -= 1; }
-  selectedISO = `${viewYear}-${pad2(viewMonth+1)}-01`;
-  dueDateEl.value = selectedISO;
-  await reloadMonth();
-});
-
-nextBtn.addEventListener("click", async ()=>{
-  viewMonth += 1;
-  if(viewMonth > 11){ viewMonth = 0; viewYear += 1; }
-  selectedISO = `${viewYear}-${pad2(viewMonth+1)}-01`;
-  dueDateEl.value = selectedISO;
-  await reloadMonth();
-});
-
-// 今月：今月表示＋「今日」にフォーカス
-thisMonthBtn.addEventListener("click", async ()=>{
-  const t = new Date();
-  viewYear = t.getFullYear();
-  viewMonth = t.getMonth();
-  selectedISO = todayISO();         // ← 今日へ
-  dueDateEl.value = selectedISO;
-  await reloadMonth();
-});
-
-logoutBtn.addEventListener("click", ()=>{
-  localStorage.removeItem("couple_id");
-  location.reload();
-});
-
-/* ===== 初期化 ====/* ===== 日記 ===== */
-const diaryDateEl = document.getElementById("diaryDate");
-const diaryTitleEl = document.getElementById("diaryTitle");
-const diaryBodyEl = document.getElementById("diaryBody");
-const loadDiaryBtn = document.getElementById("loadDiary");
-const saveDiaryBtn = document.getElementById("saveDiary");
-const deleteDiaryBtn = document.getElementById("deleteDiary");
-const diaryStatusEl = document.getElementById("diaryStatus");
-const diaryErrorEl = document.getElementById("diaryError");
-const diaryListEl = document.getElementById("diaryList");
-
-let currentDiaryId = null;
-
-function setDiaryStatus(s){ diaryStatusEl.textContent = s || ""; }
-function setDiaryError(s){ diaryErrorEl.textContent = s || ""; }
-
+/* ===== 日記 ===== */
 async function fetchDiary(dateISO){
   const { data, error } = await sb
     .from("diaries")
@@ -685,7 +484,6 @@ async function fetchDiary(dateISO){
     .eq("date", dateISO)
     .order("created_at", { ascending:false })
     .limit(1);
-
   if(error) throw error;
   return (data && data[0]) || null;
 }
@@ -788,28 +586,112 @@ async function deleteDiary(){
   }
 }
 
+/* ===== イベント ===== */
+aiBtn.addEventListener("click", ()=>{
+  const raw = (txtEl.value || "").trim();
+  if(!raw) return;
+  const p = localAIParse(raw);
+  txtEl.value = p.title;
+  dueDateEl.value = p.due_date;
+  dueTimeEl.value = p.due_time;
+});
+
+addBtn.addEventListener("click", async ()=>{
+  const raw = (txtEl.value || "").trim();
+  if(!raw){ setError("ToDoが空です"); return; }
+
+  // ★整形押し忘れでも必ず解析
+  const p = localAIParse(raw);
+
+  const due = (dueDateEl.value || p.due_date);
+  const time = (dueTimeEl.value || p.due_time);
+
+  setError("");
+  try{
+    setStatus("追加中…");
+    const { error } = await sb.from("todos").insert([{
+      couple_id: COUPLE_ID,
+      title: p.title,
+      due_date: due,
+      due_time: time || null,
+      done: false
+    }]);
+    if(error) throw error;
+
+    txtEl.value = "";
+    dueTimeEl.value = "";
+    selectedISO = due;
+    dueDateEl.value = due;
+
+    const d = fromISO(due);
+    viewYear = d.getFullYear();
+    viewMonth = d.getMonth();
+
+    await reloadMonth();
+  }catch(err){
+    setStatus("");
+    setError(err.message || String(err));
+  }
+});
+
+prevBtn.addEventListener("click", async ()=>{
+  viewMonth -= 1;
+  if(viewMonth < 0){ viewMonth = 11; viewYear -= 1; }
+  selectedISO = `${viewYear}-${pad2(viewMonth+1)}-01`;
+  dueDateEl.value = selectedISO;
+  await reloadMonth();
+});
+
+nextBtn.addEventListener("click", async ()=>{
+  viewMonth += 1;
+  if(viewMonth > 11){ viewMonth = 0; viewYear += 1; }
+  selectedISO = `${viewYear}-${pad2(viewMonth+1)}-01`;
+  dueDateEl.value = selectedISO;
+  await reloadMonth();
+});
+
+thisMonthBtn.addEventListener("click", async ()=>{
+  const t = new Date();
+  viewYear = t.getFullYear();
+  viewMonth = t.getMonth();
+  selectedISO = todayISO();
+  dueDateEl.value = selectedISO;
+  await reloadMonth();
+});
+
+logoutBtn.addEventListener("click", ()=>{
+  localStorage.removeItem("couple_id");
+  location.reload();
+});
+
+clearCouple.addEventListener("click", ()=>{
+  localStorage.removeItem("couple_id");
+  location.reload();
+});
+
+/* 日記イベント */
 loadDiaryBtn.addEventListener("click", loadDiary);
 saveDiaryBtn.addEventListener("click", saveDiary);
 deleteDiaryBtn.addEventListener("click", deleteDiary);
- */
-  
+
+/* ===== init ===== */
 (function init(){
   if(!COUPLE_ID){
     loginCard.style.display="block";
     app.style.display="none";
+
     saveCouple.addEventListener("click", ()=>{
       const v = (coupleInput.value || "").trim();
-      if(!v){ loginErr.textContent = "合言葉を入力してください"; return; }
+      if(!v){ loginErr.textContent = "共有IDを入力してください"; return; }
       localStorage.setItem("couple_id", v);
       location.reload();
     });
+
     return;
   }
 
   loginCard.style.display="none";
   app.style.display="block";
-  diaryDateEl.value = todayISO();
-renderDiaryList();
 
   renderAnniversary();
 
@@ -818,6 +700,10 @@ renderDiaryList();
   viewMonth = t.getMonth();
   selectedISO = todayISO();
   dueDateEl.value = selectedISO;
+
+  diaryDateEl.value = todayISO();
+  renderDiaryList();
+  loadDiary();
 
   reloadMonth();
 })();
