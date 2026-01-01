@@ -63,9 +63,9 @@
     <div class="card">
       <h2>ToDo</h2>
      <div class="row">
-  <input id="txt" type="text" placeholder="例：明日 19時 ケーキ買う / 1/5 病院に電話" />
-  <input id="dueDate" type="date" />
-  <button id="ai">整形</button>
+<input id="dueDate" type="date" />
+<input id="dueTime" type="time" />
+<button id="ai">整形</button>
   <button id="add">追加</button>
   <button id="reload">更新</button>
 </div>
@@ -237,32 +237,37 @@ function escapeHtml(s){
 function localAIParse(input){
   let s = (input || "").trim();
   const now = new Date();
-  let due = new Date(now.getFullYear(), now.getMonth(), now.getDate()); // 今日
+  let due = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  let time = "";
+
+  // 時刻（19時 / 19:30 / 7:00）
+  const hm = s.match(/(\d{1,2})(?:時|:)(\d{2})?/);
+  if(hm){
+    const h = Number(hm[1]);
+    const m = hm[2] ? Number(hm[2]) : 0;
+    time = `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`;
+    s = s.replace(hm[0],"").trim();
+  }
 
   // 今日/明日/明後日
-  if(/今日/.test(s)){ /* today */ }
-  else if(/明後日/.test(s)){ due.setDate(due.getDate()+2); s = s.replace("明後日","").trim(); }
-  else if(/明日/.test(s)){ due.setDate(due.getDate()+1); s = s.replace("明日","").trim(); }
+  if(/明後日/.test(s)){ due.setDate(due.getDate()+2); s=s.replace("明後日",""); }
+  else if(/明日/.test(s)){ due.setDate(due.getDate()+1); s=s.replace("明日",""); }
 
-  // YYYY/MM/DD or YYYY-MM-DD
+  // YYYY/MM/DD
   const ymd = s.match(/(20\d{2})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
   if(ymd){
-    const y = Number(ymd[1]), m = Number(ymd[2]), d = Number(ymd[3]);
-    due = new Date(y, m-1, d);
+    due = new Date(+ymd[1], +ymd[2]-1, +ymd[3]);
     s = s.replace(ymd[0],"").trim();
-  } else {
-    // M/D or M-D
-    const md = s.match(/(\d{1,2})[\/\-](\d{1,2})/);
-    if(md){
-      const m = Number(md[1]), d = Number(md[2]);
-      let y = now.getFullYear();
-      let cand = new Date(y, m-1, d);
-      // 過去なら来年
-      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      if(cand < today) cand = new Date(y+1, m-1, d);
-      due = cand;
-      s = s.replace(md[0],"").trim();
-    }
+  }
+
+  const title = s.replace(/\s+/g," ").trim() || "ToDo";
+
+  return {
+    title,
+    due_date: toISODate(due),
+    due_time: time
+  };
+}
   }
 
   // タイトル整形（超軽い）
@@ -369,7 +374,7 @@ function buildCalendar(y, m, todos){
 
     calendarGrid.appendChild(cell);
   }
-}
+
 
 function renderTodoListForSelected(){
   const iso = selectedDateISO;
@@ -466,13 +471,12 @@ async function onAdd(){
 }
 
 function onAI(){
-  const raw = (txt.value || "").trim();
+  const raw = txt.value.trim();
   if(!raw) return;
-  const parsed = localAIParse(raw);
-  txt.value = parsed.title;
-  dueDateInput.value = parsed.due_date;
-  // 選択日も同期
-  selectedDateISO = parsed.due_date;
+  const p = localAIParse(raw);
+  txt.value = p.title;
+  dueDateInput.value = p.due_date;
+  dueTimeInput.value = p.due_time;
 }
 
 // カレンダー操作
