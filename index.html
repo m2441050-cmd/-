@@ -290,17 +290,63 @@ function localAIParse(input){
   let due = new Date(today0);
   let time = "";
 
-  // ---- 時刻（8時 / 8:30 / 08:30 / 20時） ----
-  // ※「4日8時」みたいな連結も拾えるように、まず時刻を取る
-  const hm = s.match(/(\d{1,2})(?:時|:)(\d{2})?/);
-  if(hm){
-    const h = Number(hm[1]);
-    const m = hm[2] ? Number(hm[2]) : 0;
-    if(h >= 0 && h <= 23 && m >= 0 && m <= 59){
-      time = `${pad2(h)}:${pad2(m)}`;
-      s = s.replace(hm[0]," ").trim();
+  // --- 時刻（4日8時 みたいな連結も拾う）---
+  // 例: "8時", "8:30", "08:30"
+  let m;
+  if((m = s.match(/(\d{1,2})(?:時|:)(\d{2})?/))){
+    const h = Number(m[1]);
+    const mm = m[2] ? Number(m[2]) : 0;
+    if(h>=0 && h<=23 && mm>=0 && mm<=59){
+      time = `${String(h).padStart(2,"0")}:${String(mm).padStart(2,"0")}`;
+      s = s.replace(m[0], " ").trim();
     }
   }
+
+  // --- 相対 ---
+  if(/明後日/.test(s)){ due.setDate(due.getDate()+2); s = s.replace("明後日"," "); }
+  else if(/明日/.test(s)){ due.setDate(due.getDate()+1); s = s.replace("明日"," "); }
+  else if(/今日/.test(s)){ s = s.replace("今日"," "); }
+
+  // --- 年月日 ---
+  if((m = s.match(/(20\d{2})[\/\-](\d{1,2})[\/\-](\d{1,2})/))){
+    due = new Date(+m[1], +m[2]-1, +m[3]);
+    s = s.replace(m[0]," ").trim();
+  }
+  // --- 月日 ---
+  else if((m = s.match(/(\d{1,2})[\/\-](\d{1,2})/))){
+    let y = now.getFullYear();
+    const cand = new Date(y, +m[1]-1, +m[2]);
+    due = (cand < today0) ? new Date(y+1, +m[1]-1, +m[2]) : cand;
+    s = s.replace(m[0]," ").trim();
+  }
+  // --- 「1月4日」 ---
+  else if((m = s.match(/(\d{1,2})月(\d{1,2})日/))){
+    let y = now.getFullYear();
+    const cand = new Date(y, +m[1]-1, +m[2]);
+    due = (cand < today0) ? new Date(y+1, +m[1]-1, +m[2]) : cand;
+    s = s.replace(m[0]," ").trim();
+  }
+  // --- 「4日」ここが今回の肝 ---
+  else if((m = s.match(/(\d{1,2})日/))){
+    const day = +m[1];
+    let y = now.getFullYear();
+    let mon = now.getMonth();
+    let cand = new Date(y, mon, day);
+
+    // その日が今日より前なら来月へ
+    if(cand < today0){
+      mon += 1;
+      if(mon > 11){ mon = 0; y += 1; }
+      cand = new Date(y, mon, day);
+    }
+    due = cand;
+    s = s.replace(m[0]," ").trim();
+  }
+
+  let title = s.replace(/\s+/g," ").trim();
+  if(!title) title = "ToDo";
+  return { title, due_date: toISO(due), due_time: time };
+}
 
   // ---- 相対日付 ----
   if(/明後日/.test(s)){ due.setDate(due.getDate()+2); s = s.replace("明後日"," "); }
@@ -539,17 +585,20 @@ addBtn.addEventListener("click", async ()=>{
   const raw = (txtEl.value || "").trim();
   if(!raw){ setError("ToDoが空です"); return; }
 
+  // 入力欄の日付/時間
   let due = dueDateEl.value || "";
   let time = dueTimeEl.value || "";
 
-  // 日付未入力ならAIで拾う
-  let title = raw;
-  if(!due){
-    const p = localAIParse(raw);
-    title = p.title;
-    due = p.due_date;
-    time = time || p.due_time;
-  }
+  // ★ ここで必ずAI解析（整形押し忘れ対策）
+  const p = localAIParse(raw);
+
+  // 日付欄が空ならAIの結果を採用
+  if(!due) due = p.due_date;
+  // 時刻欄が空ならAIの結果を採用
+  if(!time) time = p.due_time;
+
+  // タイトルはAI整形のものを基本採用（余計な日付/時刻が残らない）
+  const title = p.title;
 
   setError("");
   try{
@@ -563,8 +612,10 @@ addBtn.addEventListener("click", async ()=>{
     }]);
     if(error) throw error;
 
+    // 入力欄クリア
     txtEl.value = "";
     dueTimeEl.value = "";
+    // 選択日を追加した日に合わせる
     selectedISO = due;
     dueDateEl.value = due;
 
