@@ -23,6 +23,34 @@
     .cardSub{border:1px solid #eee;border-radius:12px;padding:10px;background:#fafafa;margin-top:10px}
     .grid{display:grid;grid-template-columns:1fr;gap:12px}
     @media (min-width:900px){ .grid{grid-template-columns:1fr 1fr} }
+    /* Calendar */
+#calendarCard { position: sticky; top: 12px; }
+#calendarGrid{
+  display:grid;
+  grid-template-columns:repeat(7,1fr);
+  gap:8px;
+}
+.calHead{
+  font-size:12px;
+  opacity:.6;
+  text-align:center;
+}
+.calCell{
+  border:1px solid #eee;
+  border-radius:12px;
+  padding:10px;
+  min-height:70px;
+  cursor:pointer;
+  background:#fff;
+}
+.calCell:hover{ box-shadow:0 6px 18px rgba(0,0,0,.06); }
+.calDayNum{ font-weight:700; font-size:12px; }
+.calMeta{ margin-top:6px; font-size:12px; opacity:.7; }
+.calSelected{ outline:2px solid rgba(123,108,255,.6); }
+.calToday{ border-color: rgba(123,108,255,.5); }
+.calDots{ margin-top:8px; display:flex; gap:4px; flex-wrap:wrap; }
+.dot{ width:8px; height:8px; border-radius:999px; background:#7b6cff; opacity:.85; }
+.dotOverdue{ background:#ff6b6b; }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
@@ -34,11 +62,14 @@
     <!-- ToDo -->
     <div class="card">
       <h2>ToDo</h2>
-      <div class="row">
-        <input id="txt" type="text" placeholder="ToDoを入力" />
-        <button id="add">追加</button>
-        <button id="reload">更新</button>
-      </div>
+     <div class="row">
+  <input id="txt" type="text" placeholder="例：明日 19時 ケーキ買う / 1/5 病院に電話" />
+  <input id="dueDate" type="date" />
+  <button id="ai">整形</button>
+  <button id="add">追加</button>
+  <button id="reload">更新</button>
+</div>
+<p class="muted" style="margin:8px 0 0">※日付が空なら「今日」扱い。整形ボタンで文から日付を拾います。</p>
       <div class="row" style="margin-top:8px">
         <small id="status" class="muted"></small>
         <small id="error" class="err"></small>
@@ -50,6 +81,23 @@
         <ul id="summaryList"></ul>
       </div>
 
+    <div class="cardSub" id="calendarCard">
+  <div class="row" style="justify-content:space-between">
+    <h2 style="margin:0">カレンダー</h2>
+    <div class="row">
+      <button id="prevMonth" type="button">←</button>
+      <button id="todayBtn" type="button">今日</button>
+      <button id="nextMonth" type="button">→</button>
+    </div>
+  </div>
+
+  <div class="row" style="justify-content:space-between;margin-top:8px">
+    <div class="muted" id="monthLabel"></div>
+    <div class="muted" id="selectedLabel"></div>
+  </div>
+
+  <div id="calendarGrid" style="margin-top:10px"></div>
+</div>
       <ul id="list"></ul>
     </div>
 
@@ -94,129 +142,374 @@
     const SUPABASE_ANON_KEY = "sb_publishable_ySwVIipmFAvN6VGexnR0PQ_RDsZ4M2Z";
     const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    // ===== ToDo =====
-    const txt = document.getElementById("txt");
-    const addBtn = document.getElementById("add");
-    const reloadBtn = document.getElementById("reload");
-    const list = document.getElementById("list");
-    const statusEl = document.getElementById("status");
-    const errorEl = document.getElementById("error");
-    const summaryGate = document.getElementById("summaryGate");
-    const summaryList = document.getElementById("summaryList");
+  
+ // ===== ToDo（due_date対応 + AI整形 + カレンダー） =====
+const txt = document.getElementById("txt");
+const dueDateInput = document.getElementById("dueDate");
+const aiBtn = document.getElementById("ai");
+const addBtn = document.getElementById("add");
+const reloadBtn = document.getElementById("reload");
+const list = document.getElementById("list");
+const statusEl = document.getElementById("status");
+const errorEl = document.getElementById("error");
 
-    function setStatus(msg){ statusEl.textContent = msg || ""; }
-    function setError(msg){ errorEl.textContent = msg || ""; }
+// Calendar UI
+const prevMonthBtn = document.getElementById("prevMonth");
+const nextMonthBtn = document.getElementById("nextMonth");
+const todayBtn = document.getElementById("todayBtn");
+const monthLabel = document.getElementById("monthLabel");
+const selectedLabel = document.getElementById("selectedLabel");
+const calendarGrid = document.getElementById("calendarGrid");
 
-    function escapeHtml(s){
-      return s.replace(/[&<>"']/g, (c)=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
-    }
+function setStatus(msg){ statusEl.textContent = msg || ""; }
+function setError(msg){ errorEl.textContent = msg || ""; }
 
-    async function fetchTodos(){
-      const { data, error } = await sb
-        .from("todos")
-        .select("*")
-        .eq("couple_id", COUPLE_ID)
-        .order("created_at", { ascending: false });
-      if(error) throw error;
-      return data || [];
-    }
-    async function addTodo(title){
-      const { error } = await sb
-        .from("todos")
-        .insert([{ couple_id: COUPLE_ID, title, done: false }]);
-      if(error) throw error;
-    }
-    async function toggleTodo(id, done){
-      const { error } = await sb.from("todos").update({ done }).eq("id", id);
-      if(error) throw error;
-    }
-    async function deleteTodo(id){
-      const { error } = await sb.from("todos").delete().eq("id", id);
-      if(error) throw error;
-    }
+function pad2(n){ return String(n).padStart(2,"0"); }
+function toISODate(d){
+  return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+}
+function fromISODate(s){
+  const [y,m,dd] = s.split("-").map(Number);
+  return new Date(y, m-1, dd);
+}
+function todayISO(){ return toISODate(new Date()); }
 
-    function isAfter21(){
-      const now = new Date();
-      const h = now.getHours();
-      const m = now.getMinutes();
-      return (h > 21) || (h === 21 && m >= 0);
+// 「未完了は翌日に持ち越し」＝実装上は「今日開いたら過去分を今日に移す」
+async function carryOverOverdue(){
+  const today = todayISO();
+  const { error } = await sb
+    .from("todos")
+    .update({ due_date: today })
+    .eq("couple_id", COUPLE_ID)
+    .eq("done", false)
+    .lt("due_date", today);
+
+  if(error) throw error;
+}
+
+// 期間でToDo取得（カレンダー表示用）
+async function fetchTodosBetween(startISO, endISO){
+  const { data, error } = await sb
+    .from("todos")
+    .select("*")
+    .eq("couple_id", COUPLE_ID)
+    .gte("due_date", startISO)
+    .lte("due_date", endISO)
+    .order("due_date", { ascending: true })
+    .order("created_at", { ascending: false });
+
+  if(error) throw error;
+  return data || [];
+}
+
+async function addTodo(title, due_date){
+  const { error } = await sb.from("todos").insert([{
+    couple_id: COUPLE_ID,
+    title,
+    due_date,
+    done: false
+  }]);
+  if(error) throw error;
+}
+
+async function toggleTodo(id, done){
+  const { error } = await sb.from("todos").update({ done }).eq("id", id);
+  if(error) throw error;
+}
+
+async function deleteTodo(id){
+  const { error } = await sb.from("todos").delete().eq("id", id);
+  if(error) throw error;
+}
+
+function escapeHtml(s){
+  return s.replace(/[&<>"']/g, (c)=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+}
+
+/**
+ * 疑似AI整形（ローカル）
+ * 例：
+ *  - "明日 ケーキ買う" -> due=tomorrow
+ *  - "1/5 病院に電話" -> due=今年の1/5（過ぎてたら来年）
+ *  - "2026/1/5 ○○" -> due=その日
+ *  - 日付無し -> 今日
+ */
+function localAIParse(input){
+  let s = (input || "").trim();
+  const now = new Date();
+  let due = new Date(now.getFullYear(), now.getMonth(), now.getDate()); // 今日
+
+  // 今日/明日/明後日
+  if(/今日/.test(s)){ /* today */ }
+  else if(/明後日/.test(s)){ due.setDate(due.getDate()+2); s = s.replace("明後日","").trim(); }
+  else if(/明日/.test(s)){ due.setDate(due.getDate()+1); s = s.replace("明日","").trim(); }
+
+  // YYYY/MM/DD or YYYY-MM-DD
+  const ymd = s.match(/(20\d{2})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+  if(ymd){
+    const y = Number(ymd[1]), m = Number(ymd[2]), d = Number(ymd[3]);
+    due = new Date(y, m-1, d);
+    s = s.replace(ymd[0],"").trim();
+  } else {
+    // M/D or M-D
+    const md = s.match(/(\d{1,2})[\/\-](\d{1,2})/);
+    if(md){
+      const m = Number(md[1]), d = Number(md[2]);
+      let y = now.getFullYear();
+      let cand = new Date(y, m-1, d);
+      // 過去なら来年
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      if(cand < today) cand = new Date(y+1, m-1, d);
+      due = cand;
+      s = s.replace(md[0],"").trim();
     }
+  }
 
-    function renderSummary(items){
-      summaryList.innerHTML = "";
-      const gate = isAfter21();
-      summaryGate.textContent = gate ? "21:00以降：未完了を表示中" : "21:00前：ここは空のまま";
-      if(!gate) return;
+  // タイトル整形（超軽い）
+  let title = s
+    .replace(/\s+/g," ")
+    .replace(/^[:：\-\–\—]+/,"")
+    .trim();
 
-      const open = items.filter(x => !x.done);
-      if(open.length === 0){
-        const li = document.createElement("li");
-        li.textContent = "未完了はありません";
-        summaryList.appendChild(li);
-        return;
-      }
-      open.slice(0, 7).forEach(it => {
-        const li = document.createElement("li");
-        li.textContent = it.title;
-        summaryList.appendChild(li);
-      });
-      if(open.length > 7){
-        const li = document.createElement("li");
-        li.className = "muted";
-        li.textContent = `ほか ${open.length - 7} 件…`;
-        summaryList.appendChild(li);
-      }
-    }
+  if(!title) title = "ToDo";
 
-    async function renderTodos(){
-      setError("");
-      list.innerHTML = "";
-      summaryList.innerHTML = "";
-      try{
-        setStatus("読み込み中…");
-        const items = await fetchTodos();
-        setStatus(`件数：${items.length}`);
-        renderSummary(items);
+  return { title, due_date: toISODate(due) };
+}
 
-        items.forEach(it => {
-          const li = document.createElement("li");
-          li.className = it.done ? "done" : "";
-          li.innerHTML = `
-            <label style="display:flex;gap:10px;align-items:center">
-              <input type="checkbox" ${it.done ? "checked":""} />
-              <span style="flex:1">${escapeHtml(it.title)}</span>
-              <button>削除</button>
-            </label>
-          `;
-          li.querySelector("input").addEventListener("change", async (e)=>{
-            try{ await toggleTodo(it.id, e.target.checked); renderAll(); }
-            catch(err){ setError(err.message || String(err)); }
-          });
-          li.querySelector("button").addEventListener("click", async ()=>{
-            try{ await deleteTodo(it.id); renderAll(); }
-            catch(err){ setError(err.message || String(err)); }
-          });
-          list.appendChild(li);
-        });
-      }catch(err){
-        setStatus("");
-        setError("ToDo保存/取得エラー：" + (err.message || String(err)));
-      }
-    }
+// カレンダー表示用：今見てる月
+let viewYear = (new Date()).getFullYear();
+let viewMonth = (new Date()).getMonth(); // 0-11
+let selectedDateISO = todayISO();
+let monthTodosCache = []; // その月のtodos
 
-    async function onAdd(){
-      const v = (txt.value || "").trim();
-      if(!v) return;
-      try{
-        setError(""); setStatus("追加中…");
-        await addTodo(v);
-        txt.value = "";
-        renderAll();
-      }catch(err){
-        setStatus("");
-        setError("追加エラー：" + (err.message || String(err)));
-      }
-    }
+function monthRangeISO(y, m){
+  const start = new Date(y, m, 1);
+  const end = new Date(y, m+1, 0); // 月末
+  return { startISO: toISODate(start), endISO: toISODate(end) };
+}
+
+function groupByDate(todos){
+  const map = new Map();
+  for(const t of todos){
+    if(!map.has(t.due_date)) map.set(t.due_date, []);
+    map.get(t.due_date).push(t);
+  }
+  return map;
+}
+
+function buildCalendar(y, m, todos){
+  calendarGrid.innerHTML = "";
+
+  const heads = ["日","月","火","水","木","金","土"];
+  for(const h of heads){
+    const el = document.createElement("div");
+    el.className = "calHead";
+    el.textContent = h;
+    calendarGrid.appendChild(el);
+  }
+
+  monthLabel.textContent = `${y}年 ${m+1}月`;
+  selectedLabel.textContent = `選択中：${selectedDateISO}`;
+
+  const first = new Date(y, m, 1);
+  const startDow = first.getDay(); // 0=Sun
+  const daysInMonth = new Date(y, m+1, 0).getDate();
+
+  const today = todayISO();
+  const byDate = groupByDate(todos);
+
+  // 空セル
+  for(let i=0;i<startDow;i++){
+    const spacer = document.createElement("div");
+    spacer.style.minHeight = "70px";
+    calendarGrid.appendChild(spacer);
+  }
+
+  for(let day=1; day<=daysInMonth; day++){
+    const iso = `${y}-${pad2(m+1)}-${pad2(day)}`;
+    const cell = document.createElement("div");
+    cell.className = "calCell";
+
+    if(iso === selectedDateISO) cell.classList.add("calSelected");
+    if(iso === today) cell.classList.add("calToday");
+
+    const items = byDate.get(iso) || [];
+    const open = items.filter(x=>!x.done);
+    const overdueOpen = open.filter(x=>x.due_date < today);
+
+    const num = document.createElement("div");
+    num.className = "calDayNum";
+    num.textContent = day;
+
+    const meta = document.createElement("div");
+    meta.className = "calMeta";
+    meta.textContent = open.length ? `未完了 ${open.length}件` : " ";
+
+    const dots = document.createElement("div");
+    dots.className = "calDots";
+    // 最大6個だけドット
+    const show = open.slice(0,6);
+    show.forEach(t=>{
+      const d = document.createElement("span");
+      d.className = "dot" + (t.due_date < today ? " dotOverdue" : "");
+      dots.appendChild(d);
+    });
+
+    cell.appendChild(num);
+    cell.appendChild(meta);
+    cell.appendChild(dots);
+
+    cell.addEventListener("click", ()=>{
+      selectedDateISO = iso;
+      dueDateInput.value = iso; // 入力にも反映（便利）
+      selectedLabel.textContent = `選択中：${selectedDateISO}`;
+      renderTodoListForSelected();
+      buildCalendar(viewYear, viewMonth, monthTodosCache);
+    });
+
+    calendarGrid.appendChild(cell);
+  }
+}
+
+function renderTodoListForSelected(){
+  const iso = selectedDateISO;
+  const today = todayISO();
+  list.innerHTML = "";
+
+  // 選択日のToDo + （過去未完了は「持ち越し」扱いで今日に集約する設計なので、ここではその日分のみ）
+  const items = monthTodosCache.filter(t => t.due_date === iso);
+
+  if(items.length === 0){
+    const li = document.createElement("li");
+    li.className = "muted";
+    li.textContent = "この日のToDoはありません";
+    list.appendChild(li);
+    return;
+  }
+
+  items.forEach(it=>{
+    const li = document.createElement("li");
+    li.className = it.done ? "done" : "";
+    li.innerHTML = `
+      <label style="display:flex;gap:10px;align-items:center">
+        <input type="checkbox" ${it.done ? "checked":""} />
+        <span style="flex:1">${escapeHtml(it.title)}</span>
+        <button type="button">削除</button>
+      </label>
+    `;
+
+    li.querySelector("input").addEventListener("change", async (e)=>{
+      try{ await toggleTodo(it.id, e.target.checked); await reloadMonth(); }
+      catch(err){ setError(err.message || String(err)); }
+    });
+
+    li.querySelector("button").addEventListener("click", async ()=>{
+      try{ await deleteTodo(it.id); await reloadMonth(); }
+      catch(err){ setError(err.message || String(err)); }
+    });
+
+    list.appendChild(li);
+  });
+}
+
+async function reloadMonth(){
+  setError("");
+  try{
+    setStatus("同期中…（未完了の持ち越し処理も実行）");
+    await carryOverOverdue();
+
+    const { startISO, endISO } = monthRangeISO(viewYear, viewMonth);
+    monthTodosCache = await fetchTodosBetween(startISO, endISO);
+
+    setStatus("OK");
+    buildCalendar(viewYear, viewMonth, monthTodosCache);
+    renderTodoListForSelected();
+  }catch(err){
+    setStatus("");
+    setError(err.message || String(err));
+  }
+}
+
+async function onAdd(){
+  const raw = (txt.value || "").trim();
+  if(!raw) return;
+
+  // 日付入力があればそれ優先、なければローカルAIで拾う
+  let title = raw;
+  let due = dueDateInput.value || "";
+
+  if(!due){
+    const parsed = localAIParse(raw);
+    title = parsed.title;
+    due = parsed.due_date;
+  }else{
+    // 入力日付があるなら、タイトルだけ軽く整える
+    title = raw.replace(/\s+/g," ").trim();
+  }
+
+  try{
+    setError(""); setStatus("追加中…");
+    await addTodo(title, due);
+    txt.value = "";
+    // 追加後はその日を選択
+    selectedDateISO = due;
+    dueDateInput.value = due;
+    // 表示月も合わせる
+    const d = fromISODate(due);
+    viewYear = d.getFullYear();
+    viewMonth = d.getMonth();
+    await reloadMonth();
+  }catch(err){
+    setStatus("");
+    setError(err.message || String(err));
+  }
+}
+
+function onAI(){
+  const raw = (txt.value || "").trim();
+  if(!raw) return;
+  const parsed = localAIParse(raw);
+  txt.value = parsed.title;
+  dueDateInput.value = parsed.due_date;
+  // 選択日も同期
+  selectedDateISO = parsed.due_date;
+}
+
+// カレンダー操作
+prevMonthBtn.addEventListener("click", async ()=>{
+  viewMonth -= 1;
+  if(viewMonth < 0){ viewMonth = 11; viewYear -= 1; }
+  const first = new Date(viewYear, viewMonth, 1);
+  selectedDateISO = toISODate(first);
+  dueDateInput.value = selectedDateISO;
+  await reloadMonth();
+});
+nextMonthBtn.addEventListener("click", async ()=>{
+  viewMonth += 1;
+  if(viewMonth > 11){ viewMonth = 0; viewYear += 1; }
+  const first = new Date(viewYear, viewMonth, 1);
+  selectedDateISO = toISODate(first);
+  dueDateInput.value = selectedDateISO;
+  await reloadMonth();
+});
+todayBtn.addEventListener("click", async ()=>{
+  const t = new Date();
+  viewYear = t.getFullYear();
+  viewMonth = t.getMonth();
+  selectedDateISO = todayISO();
+  dueDateInput.value = selectedDateISO;
+  await reloadMonth();
+});
+
+// 既存イベント
+aiBtn.addEventListener("click", onAI);
+addBtn.addEventListener("click", onAdd);
+reloadBtn.addEventListener("click", reloadMonth);
+txt.addEventListener("keydown", (e)=>{ if(e.key === "Enter") onAdd(); });
+
+// init（ページ起動時）
+dueDateInput.value = selectedDateISO;
+reloadMonth();
 
     // ===== Diary =====
     const diaryDate = document.getElementById("diaryDate");
