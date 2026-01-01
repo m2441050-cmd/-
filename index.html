@@ -4,249 +4,554 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>Couple OS</title>
-
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
 <style>
-body{
-  font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans",sans-serif;
-  max-width:1000px;
-  margin:32px auto;
-  padding:0 16px;
-  background:linear-gradient(160deg,#f6f2ff,#ffffff);
-}
-h1{font-size:26px;margin-bottom:4px}
-h2{font-size:16px;margin:0 0 8px}
-.small{font-size:13px;opacity:.7}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans",sans-serif;
+    max-width:1080px;margin:28px auto;padding:0 16px;
+    background:linear-gradient(160deg,#f6f2ff,#ffffff);
+  }
+  h1{font-size:26px;margin:0 0 6px}
+  h2{font-size:16px;margin:0 0 10px}
+  .muted{opacity:.7;font-size:13px}
+  .err{color:#b00020;font-size:13px}
+  .card{
+    background:#fff;border-radius:18px;padding:16px;margin:14px 0;
+    box-shadow:0 12px 30px rgba(0,0,0,.06);
+  }
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  input,button,textarea{
+    padding:10px 12px;border-radius:10px;border:1px solid #ccc;
+    font-size:14px;
+  }
+  button{cursor:pointer;background:#7b6cff;color:#fff;border:none}
+  button.sub{background:#aaa}
+  button.ghost{background:#fff;color:#333;border:1px solid #ddd}
+  .grid{display:grid;grid-template-columns:1fr;gap:14px}
+  @media (min-width:980px){ .grid{grid-template-columns:1fr 1fr} }
 
-.card{
-  background:#fff;
-  border-radius:18px;
-  padding:16px;
-  margin-bottom:16px;
-  box-shadow:0 12px 30px rgba(0,0,0,.06);
-}
+  /* Calendar */
+  #calendarWrap{position:sticky;top:10px}
+  #calendarGrid{display:grid;grid-template-columns:repeat(7,1fr);gap:8px}
+  .calHead{font-size:12px;opacity:.6;text-align:center}
+  .calCell{
+    border:1px solid #eee;border-radius:12px;padding:10px;min-height:76px;
+    cursor:pointer;background:#fff;
+  }
+  .calCell:hover{box-shadow:0 6px 18px rgba(0,0,0,.06)}
+  .calToday{border-color:rgba(123,108,255,.7)}
+  .calSelected{outline:2px solid rgba(123,108,255,.7)}
+  .calNum{font-weight:700;font-size:12px}
+  .calMeta{margin-top:6px;font-size:12px;opacity:.75}
+  .dots{margin-top:8px;display:flex;gap:4px;flex-wrap:wrap}
+  .dot{width:8px;height:8px;border-radius:999px;background:#7b6cff;opacity:.85}
 
-.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-input,button{
-  padding:10px 12px;
-  border-radius:10px;
-  border:1px solid #ccc;
-}
-button{
-  cursor:pointer;
-  background:#7b6cff;
-  color:#fff;
-  border:none;
-}
-button.sub{background:#aaa}
-ul{padding-left:18px;margin:8px 0}
-li{margin:6px 0}
-.done{text-decoration:line-through;opacity:.5}
-
-#calendar{
-  display:grid;
-  grid-template-columns:repeat(7,1fr);
-  gap:8px;
-}
-.calHead{font-size:12px;text-align:center;opacity:.6}
-.calCell{
-  border:1px solid #eee;
-  border-radius:12px;
-  padding:8px;
-  min-height:70px;
-  cursor:pointer;
-}
-.calToday{border-color:#7b6cff}
-.calSelected{outline:2px solid #7b6cff}
-.dot{width:8px;height:8px;border-radius:999px;background:#7b6cff;margin-top:4px}
-
-.anniv{font-size:18px;color:#d6336c}
+  ul{padding-left:18px;margin:8px 0}
+  li{margin:6px 0}
+  .done{text-decoration:line-through;opacity:.55}
+  .anniv{font-size:18px;color:#d6336c}
 </style>
 </head>
 
 <body>
+  <h1>💑 Couple OS</h1>
+  <div class="muted">カップルの生活をひとつに</div>
 
-<h1>💑 Couple OS</h1>
-<div class="small">カップルの生活をひとつに</div>
-
-<!-- 合言葉（初回のみ） -->
-<div class="card" id="coupleCard" style="display:none">
-  <h2>共有ID</h2>
-  <div class="row">
-    <input id="coupleInput" placeholder="合言葉を入力" />
-    <button id="saveCouple">保存</button>
-  </div>
-</div>
-
-<!-- 記念日 -->
-<div class="card" id="annivCard" style="display:none">
-  <div id="annivText" class="anniv"></div>
-</div>
-
-<!-- ToDo -->
-<div class="card">
-  <h2>ToDo</h2>
-  <div class="row">
-    <input id="txt" placeholder="例：明日 19時 ケーキ買う" style="flex:1">
-    <input id="dueDate" type="date">
-    <input id="dueTime" type="time">
-    <button id="ai">整形</button>
-    <button id="add">追加</button>
-  </div>
-</div>
-
-<!-- カレンダー -->
-<div class="card">
-  <div class="row" style="justify-content:space-between">
-    <h2>カレンダー</h2>
+  <!-- 合言葉（初回だけ表示） -->
+  <div class="card" id="loginCard" style="display:none">
+    <h2>共有ID（合言葉）</h2>
     <div class="row">
-      <button id="prev">←</button>
-      <button id="thisMonth">今月</button>
-      <button id="next">→</button>
+      <input id="coupleInput" placeholder="例：kentaria" style="flex:1;min-width:220px" />
+      <button id="saveCouple">保存</button>
+    </div>
+    <div class="muted">※一度保存したら、ログアウトするまで表示されません。</div>
+    <div class="err" id="loginErr"></div>
+  </div>
+
+  <!-- アプリ本体（ログイン後だけ表示） -->
+  <div id="app" style="display:none">
+
+    <!-- 記念日（27日のみ表示） -->
+    <div class="card" id="annivCard" style="display:none">
+      <div id="annivText" class="anniv"></div>
+    </div>
+
+    <div class="grid">
+      <!-- 左：ToDo -->
+      <div>
+        <div class="card">
+          <h2>ToDo</h2>
+          <div class="row">
+            <input id="txt" placeholder="例：明日 19時 ケーキ買う / 1/5 病院に電話" style="flex:1;min-width:240px" />
+            <input id="dueDate" type="date" />
+            <input id="dueTime" type="time" />
+            <button id="ai">整形</button>
+            <button id="add">追加</button>
+          </div>
+          <div class="muted" style="margin-top:8px">※日付が空なら「今日」。整形で日付/時間を拾います。</div>
+          <div class="row" style="margin-top:10px">
+            <div class="muted" id="status"></div>
+            <div class="err" id="error"></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2 id="dayLabel">選択日のToDo</h2>
+          <ul id="todoList"></ul>
+        </div>
+
+        <div class="card">
+          <div class="row" style="justify-content:space-between">
+            <div class="muted">必要ならログアウトできます</div>
+            <button id="logout" class="ghost" type="button">ログアウト</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 右：カレンダー -->
+      <div id="calendarWrap">
+        <div class="card">
+          <div class="row" style="justify-content:space-between">
+            <h2 style="margin:0">カレンダー</h2>
+            <div class="row">
+              <button id="prev" type="button">←</button>
+              <button id="thisMonth" type="button">今月</button>
+              <button id="next" type="button">→</button>
+            </div>
+          </div>
+          <div class="row" style="justify-content:space-between;margin-top:8px">
+            <div class="muted" id="monthLabel"></div>
+            <div class="muted" id="selectedLabel"></div>
+          </div>
+          <div id="calendarGrid" style="margin-top:10px"></div>
+        </div>
+      </div>
     </div>
   </div>
-  <div id="monthLabel" class="small"></div>
-  <div id="calendar"></div>
-</div>
-
-<!-- 当日のToDo -->
-<div class="card">
-  <h2 id="dayLabel"></h2>
-  <ul id="todoList"></ul>
-</div>
 
 <script>
-/* ===== Supabase ===== */
-const sb = supabase.createClient(
-  "https://eycneuftjdooykzjbioy.supabase.co",
-  "sb_publishable_ySwVIipmFAvN6VGexnR0PQ_RDsZ4M2Z"
-);
+/* ===== 設定 ===== */
+const SUPABASE_URL = "https://eycneuftjdooykzjbioy.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_ySwVIipmFAvN6VGexnR0PQ_RDsZ4M2Z";
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-/* ===== 合言葉 ===== */
-let COUPLE_ID = localStorage.getItem("couple_id");
-const coupleCard = document.getElementById("coupleCard");
-if(!COUPLE_ID){
-  coupleCard.style.display="block";
-  document.getElementById("saveCouple").onclick=()=>{
-    COUPLE_ID = document.getElementById("coupleInput").value.trim();
-    if(COUPLE_ID){
-      localStorage.setItem("couple_id",COUPLE_ID);
-      location.reload();
-    }
-  };
+// 付き合った日
+const START_DATE = new Date("2025-08-27T00:00:00");
+
+/* ===== DOM ===== */
+const loginCard = document.getElementById("loginCard");
+const app = document.getElementById("app");
+const coupleInput = document.getElementById("coupleInput");
+const saveCouple = document.getElementById("saveCouple");
+const loginErr = document.getElementById("loginErr");
+
+const annivCard = document.getElementById("annivCard");
+const annivText = document.getElementById("annivText");
+
+const txtEl = document.getElementById("txt");
+const dueDateEl = document.getElementById("dueDate");
+const dueTimeEl = document.getElementById("dueTime");
+const aiBtn = document.getElementById("ai");
+const addBtn = document.getElementById("add");
+const statusEl = document.getElementById("status");
+const errorEl = document.getElementById("error");
+
+const monthLabelEl = document.getElementById("monthLabel");
+const selectedLabelEl = document.getElementById("selectedLabel");
+const calendarGridEl = document.getElementById("calendarGrid");
+const dayLabelEl = document.getElementById("dayLabel");
+const todoListEl = document.getElementById("todoList");
+
+const prevBtn = document.getElementById("prev");
+const nextBtn = document.getElementById("next");
+const thisMonthBtn = document.getElementById("thisMonth");
+const logoutBtn = document.getElementById("logout");
+
+/* ===== 状態 ===== */
+let COUPLE_ID = localStorage.getItem("couple_id") || "";
+let viewYear, viewMonth; // 表示中の年月
+let selectedISO = "";   // 選択日
+let monthTodos = [];    // 月のToDo
+
+/* ===== utils ===== */
+const pad2 = (n)=> String(n).padStart(2,"0");
+const toISO = (d)=> `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+const todayISO = ()=> toISO(new Date());
+const fromISO = (s)=> { const [y,m,d]=s.split("-").map(Number); return new Date(y,m-1,d); };
+
+function setStatus(s){ statusEl.textContent = s || ""; }
+function setError(s){ errorEl.textContent = s || ""; }
+
+function escapeHtml(s){
+  return (s||"").replace(/[&<>"']/g, (c)=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
 }
 
-/* ===== 記念日 ===== */
-const START = new Date("2025-08-27");
-const today = new Date();
-if(today.getDate()===27){
-  const days = Math.floor((today-START)/86400000);
-  const months =
-    (today.getFullYear()-START.getFullYear())*12 +
-    (today.getMonth()-START.getMonth());
-  const years = Math.floor(months/12);
-  const m = months%12;
-
-  let text = `🎉 付き合って ${years}年${m}ヶ月（${days}日）`;
-  if([500,1000,1500].includes(days)) text += " 🎊";
-
-  document.getElementById("annivText").textContent=text;
-  document.getElementById("annivCard").style.display="block";
-}
-
-/* ===== AI整形（ローカル） ===== */
-function parseAI(s){
-  let t=s;
-  let d=new Date();
-  let time="";
-  if(/明日/.test(s)){d.setDate(d.getDate()+1);t=t.replace("明日","");}
-  const hm=s.match(/(\d{1,2})時/);
-  if(hm){time=hm[1].padStart(2,"0")+":00";t=t.replace(hm[0],"");}
-  return{
-    title:t.trim(),
-    date:d.toISOString().slice(0,10),
-    time
-  };
-}
-
-document.getElementById("ai").onclick=()=>{
-  const r=parseAI(txt.value);
-  txt.value=r.title;
-  dueDate.value=r.date;
-  dueTime.value=r.time;
-};
-
-/* ===== カレンダー & ToDo ===== */
-let view=new Date();
-let selected=view.toISOString().slice(0,10);
-
-async function load(){
-  const y=view.getFullYear(),m=view.getMonth();
-  monthLabel.textContent=`${y}年${m+1}月`;
-  calendar.innerHTML="";
-  ["日","月","火","水","木","金","土"].forEach(d=>{
-    const e=document.createElement("div");
-    e.className="calHead";e.textContent=d;calendar.appendChild(e);
-  });
-  const first=new Date(y,m,1).getDay();
-  for(let i=0;i<first;i++)calendar.appendChild(document.createElement("div"));
-  const last=new Date(y,m+1,0).getDate();
-
-  const {data}=await sb.from("todos").select("*")
-    .eq("couple_id",COUPLE_ID);
-
-  for(let d=1;d<=last;d++){
-    const iso=`${y}-${String(m+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
-    const c=document.createElement("div");
-    c.className="calCell";
-    if(iso===new Date().toISOString().slice(0,10))c.classList.add("calToday");
-    if(iso===selected)c.classList.add("calSelected");
-    c.textContent=d;
-    if(data.some(t=>t.due_date===iso&&!t.done)){
-      const dot=document.createElement("div");dot.className="dot";c.appendChild(dot);
-    }
-    c.onclick=()=>{selected=iso;renderDay(data);load();};
-    calendar.appendChild(c);
+/* ===== 記念日（27日のみ表示） ===== */
+function renderAnniversary(){
+  const now = new Date();
+  if(now.getDate() !== 27){
+    annivCard.style.display="none";
+    return;
   }
-  renderDay(data);
+  const days = Math.floor((new Date(now.getFullYear(),now.getMonth(),now.getDate()) - START_DATE) / 86400000);
+
+  // 年/月の計算（「日が足りない月」は繰り下げ）
+  let years = now.getFullYear() - START_DATE.getFullYear();
+  let months = now.getMonth() - START_DATE.getMonth();
+  if(months < 0){ years -= 1; months += 12; }
+
+  // 27日固定なので日繰り下げは本来起きにくいが保険
+  if(now.getDate() < START_DATE.getDate()){
+    months -= 1;
+    if(months < 0){ months = 11; years -= 1; }
+  }
+
+  // 節目：500/1000/1500/2000...
+  const milestones = [500,1000,1500,2000,2500,3000];
+  const isMilestone = milestones.includes(days);
+
+  annivText.textContent =
+    `🎉 記念日：付き合って ${years}年${months}ヶ月（${days}日）` + (isMilestone ? " 🎊" : "");
+
+  annivCard.style.display="block";
 }
 
-async function renderDay(data){
-  dayLabel.textContent=selected+" のToDo";
-  todoList.innerHTML="";
-  data.filter(t=>t.due_date===selected).forEach(t=>{
-    const li=document.createElement("li");
-    li.className=t.done?"done":"";
-    li.innerHTML=`<label><input type="checkbox"${t.done?"checked":""}> ${t.title}</label>`;
-    li.querySelector("input").onchange=async e=>{
-      await sb.from("todos").update({done:e.target.checked}).eq("id",t.id);
-      load();
-    };
-    todoList.appendChild(li);
+/* ===== 「未完了は翌日に持ち越し」 ===== */
+async function carryOverOverdue(){
+  const today = todayISO();
+  const { error } = await sb
+    .from("todos")
+    .update({ due_date: today })
+    .eq("couple_id", COUPLE_ID)
+    .eq("done", false)
+    .lt("due_date", today);
+
+  if(error) throw error;
+}
+
+/* ===== 月のToDo取得 ===== */
+async function fetchMonthTodos(y, m){
+  const start = new Date(y, m, 1);
+  const end = new Date(y, m+1, 0);
+  const startISO = toISO(start);
+  const endISO = toISO(end);
+
+  const { data, error } = await sb
+    .from("todos")
+    .select("*")
+    .eq("couple_id", COUPLE_ID)
+    .gte("due_date", startISO)
+    .lte("due_date", endISO)
+    .order("due_date", { ascending:true })
+    .order("created_at", { ascending:false });
+
+  if(error) throw error;
+  return data || [];
+}
+
+/* ===== AI整形（ローカル：日付＋時間） ===== */
+function localAIParse(input){
+  let s = (input || "").trim();
+  const now = new Date();
+  let due = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  let time = "";
+
+  // 時刻（19時 / 19:30 / 7:00 / 0730）
+  const hm = s.match(/(\d{1,2})(?:時|:)(\d{2})?/);
+  if(hm){
+    const h = Number(hm[1]);
+    const m = hm[2] ? Number(hm[2]) : 0;
+    time = `${pad2(h)}:${pad2(m)}`;
+    s = s.replace(hm[0]," ").trim();
+  }
+
+  // 今日/明日/明後日
+  if(/明後日/.test(s)){ due.setDate(due.getDate()+2); s = s.replace("明後日"," "); }
+  else if(/明日/.test(s)){ due.setDate(due.getDate()+1); s = s.replace("明日"," "); }
+  else if(/今日/.test(s)){ s = s.replace("今日"," "); }
+
+  // YYYY/MM/DD or YYYY-MM-DD
+  const ymd = s.match(/(20\d{2})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+  if(ymd){
+    due = new Date(+ymd[1], +ymd[2]-1, +ymd[3]);
+    s = s.replace(ymd[0]," ").trim();
+  } else {
+    // M/D or M-D（過去なら来年）
+    const md = s.match(/(\d{1,2})[\/\-](\d{1,2})/);
+    if(md){
+      const m = +md[1], d = +md[2];
+      let y = now.getFullYear();
+      let cand = new Date(y, m-1, d);
+      const today = new Date(now.getFullYear(),now.getMonth(),now.getDate());
+      if(cand < today) cand = new Date(y+1, m-1, d);
+      due = cand;
+      s = s.replace(md[0]," ").trim();
+    }
+  }
+
+  // タイトル整形
+  let title = s.replace(/\s+/g," ").trim();
+  if(!title) title = "ToDo";
+
+  return { title, due_date: toISO(due), due_time: time };
+}
+
+/* ===== UI描画 ===== */
+function groupByDate(todos){
+  const map = new Map();
+  for(const t of todos){
+    if(!map.has(t.due_date)) map.set(t.due_date, []);
+    map.get(t.due_date).push(t);
+  }
+  return map;
+}
+
+function buildCalendar(){
+  calendarGridEl.innerHTML = "";
+
+  // ヘッダ
+  ["日","月","火","水","木","金","土"].forEach(h=>{
+    const el = document.createElement("div");
+    el.className="calHead";
+    el.textContent=h;
+    calendarGridEl.appendChild(el);
+  });
+
+  monthLabelEl.textContent = `${viewYear}年 ${viewMonth+1}月`;
+  selectedLabelEl.textContent = `選択：${selectedISO}`;
+
+  const first = new Date(viewYear, viewMonth, 1);
+  const startDow = first.getDay();
+  const daysInMonth = new Date(viewYear, viewMonth+1, 0).getDate();
+  const byDate = groupByDate(monthTodos);
+  const tISO = todayISO();
+
+  // 空白
+  for(let i=0;i<startDow;i++){
+    calendarGridEl.appendChild(document.createElement("div"));
+  }
+
+  for(let day=1; day<=daysInMonth; day++){
+    const iso = `${viewYear}-${pad2(viewMonth+1)}-${pad2(day)}`;
+    const cell = document.createElement("div");
+    cell.className = "calCell";
+    if(iso === tISO) cell.classList.add("calToday");
+    if(iso === selectedISO) cell.classList.add("calSelected");
+
+    const num = document.createElement("div");
+    num.className="calNum";
+    num.textContent = day;
+
+    const items = (byDate.get(iso) || []).filter(x=>!x.done);
+    const meta = document.createElement("div");
+    meta.className="calMeta";
+    meta.textContent = items.length ? `未完了 ${items.length}件` : " ";
+
+    const dots = document.createElement("div");
+    dots.className="dots";
+    items.slice(0,6).forEach(()=> {
+      const d = document.createElement("span");
+      d.className="dot";
+      dots.appendChild(d);
+    });
+
+    cell.appendChild(num);
+    cell.appendChild(meta);
+    cell.appendChild(dots);
+
+    cell.addEventListener("click", ()=>{
+      selectedISO = iso;
+      dueDateEl.value = iso;
+      renderDayList();
+      buildCalendar();
+    });
+
+    calendarGridEl.appendChild(cell);
+  }
+}
+
+function renderDayList(){
+  dayLabelEl.textContent = `${selectedISO} のToDo`;
+  todoListEl.innerHTML = "";
+
+  const items = monthTodos.filter(t => t.due_date === selectedISO);
+  if(items.length === 0){
+    const li = document.createElement("li");
+    li.className="muted";
+    li.textContent="この日のToDoはありません";
+    todoListEl.appendChild(li);
+    return;
+  }
+
+  items.forEach(t=>{
+    const li = document.createElement("li");
+    li.className = t.done ? "done" : "";
+
+    const time = (t.due_time || "").trim();
+    const timeLabel = time ? `（${time}）` : "";
+
+    li.innerHTML = `
+      <label style="display:flex;gap:10px;align-items:center">
+        <input type="checkbox" ${t.done ? "checked":""} />
+        <span style="flex:1">${escapeHtml(t.title)} <span class="muted">${escapeHtml(timeLabel)}</span></span>
+        <button type="button" class="sub">削除</button>
+      </label>
+    `;
+
+    li.querySelector("input").addEventListener("change", async (e)=>{
+      setError("");
+      const { error } = await sb.from("todos").update({ done: e.target.checked }).eq("id", t.id);
+      if(error){ setError(error.message); return; }
+      await reloadMonth();
+    });
+
+    li.querySelector("button").addEventListener("click", async ()=>{
+      setError("");
+      const { error } = await sb.from("todos").delete().eq("id", t.id);
+      if(error){ setError(error.message); return; }
+      await reloadMonth();
+    });
+
+    todoListEl.appendChild(li);
   });
 }
 
-document.getElementById("add").onclick=async()=>{
-  await sb.from("todos").insert([{
-    couple_id:COUPLE_ID,
-    title:txt.value,
-    due_date:dueDate.value,
-    done:false
-  }]);
-  txt.value="";
-  load();
-};
+/* ===== メイン同期 ===== */
+async function reloadMonth(){
+  setError("");
+  try{
+    setStatus("同期中…");
+    await carryOverOverdue();
 
-prev.onclick=()=>{view.setMonth(view.getMonth()-1);load();};
-next.onclick=()=>{view.setMonth(view.getMonth()+1);load();};
-thisMonth.onclick=()=>{
-  view=new Date();
-  selected=view.toISOString().slice(0,10);
-  load();
-};
+    monthTodos = await fetchMonthTodos(viewYear, viewMonth);
 
-load();
+    setStatus("OK");
+    buildCalendar();
+    renderDayList();
+  }catch(err){
+    setStatus("");
+    setError(err.message || String(err));
+  }
+}
+
+/* ===== イベント ===== */
+aiBtn.addEventListener("click", ()=>{
+  const raw = (txtEl.value || "").trim();
+  if(!raw) return;
+  const p = localAIParse(raw);
+  txtEl.value = p.title;
+  dueDateEl.value = p.due_date;
+  dueTimeEl.value = p.due_time;
+  selectedISO = p.due_date;
+  // 表示月も合わせる
+  const d = fromISO(p.due_date);
+  viewYear = d.getFullYear();
+  viewMonth = d.getMonth();
+  reloadMonth();
+});
+
+addBtn.addEventListener("click", async ()=>{
+  const raw = (txtEl.value || "").trim();
+  if(!raw){ setError("ToDoが空です"); return; }
+
+  let due = dueDateEl.value || "";
+  let time = dueTimeEl.value || "";
+
+  // 日付未入力ならAIで拾う
+  let title = raw;
+  if(!due){
+    const p = localAIParse(raw);
+    title = p.title;
+    due = p.due_date;
+    time = time || p.due_time;
+  }
+
+  setError("");
+  try{
+    setStatus("追加中…");
+    const { error } = await sb.from("todos").insert([{
+      couple_id: COUPLE_ID,
+      title,
+      due_date: due,
+      due_time: time || null,
+      done: false
+    }]);
+    if(error) throw error;
+
+    txtEl.value = "";
+    dueTimeEl.value = "";
+    selectedISO = due;
+    dueDateEl.value = due;
+
+    const d = fromISO(due);
+    viewYear = d.getFullYear();
+    viewMonth = d.getMonth();
+
+    await reloadMonth();
+  }catch(err){
+    setStatus("");
+    setError(err.message || String(err));
+  }
+});
+
+prevBtn.addEventListener("click", async ()=>{
+  viewMonth -= 1;
+  if(viewMonth < 0){ viewMonth = 11; viewYear -= 1; }
+  selectedISO = `${viewYear}-${pad2(viewMonth+1)}-01`;
+  dueDateEl.value = selectedISO;
+  await reloadMonth();
+});
+
+nextBtn.addEventListener("click", async ()=>{
+  viewMonth += 1;
+  if(viewMonth > 11){ viewMonth = 0; viewYear += 1; }
+  selectedISO = `${viewYear}-${pad2(viewMonth+1)}-01`;
+  dueDateEl.value = selectedISO;
+  await reloadMonth();
+});
+
+// 今月：今月表示＋「今日」にフォーカス
+thisMonthBtn.addEventListener("click", async ()=>{
+  const t = new Date();
+  viewYear = t.getFullYear();
+  viewMonth = t.getMonth();
+  selectedISO = todayISO();         // ← 今日へ
+  dueDateEl.value = selectedISO;
+  await reloadMonth();
+});
+
+logoutBtn.addEventListener("click", ()=>{
+  localStorage.removeItem("couple_id");
+  location.reload();
+});
+
+/* ===== 初期化 ===== */
+(function init(){
+  if(!COUPLE_ID){
+    loginCard.style.display="block";
+    app.style.display="none";
+    saveCouple.addEventListener("click", ()=>{
+      const v = (coupleInput.value || "").trim();
+      if(!v){ loginErr.textContent = "合言葉を入力してください"; return; }
+      localStorage.setItem("couple_id", v);
+      location.reload();
+    });
+    return;
+  }
+
+  loginCard.style.display="none";
+  app.style.display="block";
+
+  renderAnniversary();
+
+  const t = new Date();
+  viewYear = t.getFullYear();
+  viewMonth = t.getMonth();
+  selectedISO = todayISO();
+  dueDateEl.value = selectedISO;
+
+  reloadMonth();
+})();
 </script>
 </body>
 </html>
