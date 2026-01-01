@@ -4,23 +4,28 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>日記を見返す - Couple OS</title>
+
+  <!-- Supabase（先に読み込ませる） -->
   <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
   <style>
     body{
       font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans",sans-serif;
       max-width:1100px;margin:28px auto;padding:0 16px;
       background:linear-gradient(160deg,#f6f2ff,#ffffff);
+      min-height:100vh;
     }
     h1{font-size:22px;margin:0 0 8px}
     h2{font-size:16px;margin:0 0 8px}
-    .muted{opacity:.7;font-size:13px}
-    .err{color:#b00020;font-size:13px}
+    .muted{opacity:.75;font-size:13px}
+    .err{color:#b00020;font-size:13px;white-space:pre-wrap}
+    .ok{color:#0b7a35;font-size:13px;white-space:pre-wrap}
     .card{
       background:#fff;border-radius:18px;padding:16px;margin:14px 0;
       box-shadow:0 12px 30px rgba(0,0,0,.06);
     }
     .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-    input,button,textarea{
+    input,button,textarea,select{
       padding:10px 12px;border-radius:10px;border:1px solid #ccc;font-size:14px;
     }
     button{cursor:pointer;background:#7b6cff;color:#fff;border:none}
@@ -46,7 +51,7 @@
     }
     .monthBox{
       border:1px solid #eee;border-radius:14px;padding:10px;background:#fafafa;
-      min-height:80px;
+      min-height:90px;
     }
     .dotsRow{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
     .dayDot{
@@ -56,14 +61,29 @@
       background:#7b6cff;color:#fff;
       cursor:pointer;
     }
+
+    /* 画面上部のエラーバナー（真っ白回避） */
+    #fatalBanner{
+      display:none;
+      position:sticky; top:0; z-index:9999;
+      background:#fff3f3; border:1px solid #ffd0d0;
+      padding:10px 12px; border-radius:12px; margin:10px 0;
+    }
   </style>
 </head>
 
 <body>
+  <div id="fatalBanner">
+    <div class="err" id="fatalText"></div>
+    <div class="muted" style="margin-top:6px">
+      ※この赤い表示が出たら、ページは“真っ白”にならずに原因が見えます。
+    </div>
+  </div>
+
   <div class="row" style="justify-content:space-between">
     <div>
       <h1>📔 日記を見返す</h1>
-      <div class="muted">月で絞り込み＆検索できます</div>
+      <div class="muted">月で絞り込み＆検索できます（エラーがあれば上に赤く出ます）</div>
     </div>
     <div class="row">
       <button class="ghost" type="button" onclick="location.href='./index.html'">← 戻る</button>
@@ -71,11 +91,19 @@
     </div>
   </div>
 
-  <div class="card" id="needLogin" style="display:none">
-    <div class="err">共有IDが未設定です。先にトップ（index）でログインしてください。</div>
-    <button class="ghost" type="button" onclick="location.href='./index.html'">トップへ</button>
+  <!-- ログインカード（diary単体で入れる） -->
+  <div class="card" id="loginCard" style="display:none">
+    <h2>ログイン（合言葉）</h2>
+    <div class="muted">あなた達2人だけで使う前提。合言葉は固定でOK。</div>
+    <div class="row" style="margin-top:10px">
+      <input id="pw" type="password" placeholder="合言葉" style="min-width:220px" />
+      <button id="loginBtn" type="button">入る</button>
+      <button id="autoBtn" class="ghost" type="button">自動で入る（kentaria）</button>
+    </div>
+    <div class="err" id="loginErr" style="margin-top:8px"></div>
   </div>
 
+  <!-- アプリ本体 -->
   <div id="app" style="display:none">
     <!-- 検索カード -->
     <div class="card">
@@ -89,6 +117,7 @@
       <div class="row" style="margin-top:8px">
         <div class="muted" id="status"></div>
         <div class="err" id="error"></div>
+        <div class="ok" id="ok"></div>
       </div>
     </div>
 
@@ -117,251 +146,295 @@
     </div>
   </div>
 
-<script>
-/* ===== Supabase ===== */
-const SUPABASE_URL = "https://eycneuftjdooykzjbioy.supabase.co";
-const SUPABASE_ANON_KEY = "sb_publishable_ySwVIipmFAvN6VGexnR0PQ_RDsZ4M2Z";
-const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  <!-- アプリJS（Supabase読み込み後に動く） -->
+  <script defer>
+  (function(){
+    // ===== 設定 =====
+    const FIXED_COUPLE_ID = "kentaria"; // 固定運用
+    const SUPABASE_URL = "https://eycneuftjdooykzjbioy.supabase.co";
+    const SUPABASE_ANON_KEY = "sb_publishable_ySwVIipmFAvN6VGexnR0PQ_RDsZ4M2Z";
 
-let COUPLE_ID = localStorage.getItem("couple_id") || "";
-  async function loadBackground(){
-  try{
-    const { data, error } = await sb
-      .from("couple_settings")
-      .select("*")
-      .eq("couple_id", COUPLE_ID)
-      .maybeSingle();
-
-    if(error) throw error;
-
-    if(data && data.background_url){
-      document.body.style.background = `url(${data.background_url}) center/cover fixed`;
-    }
-  }catch(e){
-    // diary側は静かに無視でOK
-  }
-}
-  
-
-/* ===== DOM ===== */
-const needLogin = document.getElementById("needLogin");
-const app = document.getElementById("app");
-
-const monthEl = document.getElementById("month");
-const qEl = document.getElementById("q");
-const searchBtn = document.getElementById("searchBtn");
-const listEl = document.getElementById("list");
-const statusEl = document.getElementById("status");
-const errorEl = document.getElementById("error");
-
-const yearCalendarEl = document.getElementById("yearCalendar");
-
-const detailMeta = document.getElementById("detailMeta");
-const detailTitle = document.getElementById("detailTitle");
-const detailBody = document.getElementById("detailBody");
-const deleteBtn = document.getElementById("deleteBtn");
-const logoutBtn = document.getElementById("logout");
-
-let currentDiaryId = null;
-
-function setStatus(s){ statusEl.textContent = s || ""; }
-function setError(s){ errorEl.textContent = s || ""; }
-
-function escapeHtml(s){
-  return (s||"").replace(/[&<>"']/g, (c)=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
-}
-
-function highlight(text, q){
-  if(!q) return text;
-  const esc = q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return (text||"").replace(new RegExp(esc,"gi"), m => `【${m}】`);
-}
-
-function todayMonthISO(){
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
-}
-
-function monthRange(monthISO){
-  const [y,m] = monthISO.split("-").map(Number);
-  const start = new Date(y, m-1, 1);
-  const end = new Date(y, m, 0);
-  const toISO = (dt)=> `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}-${String(dt.getDate()).padStart(2,"0")}`;
-  return { start: toISO(start), end: toISO(end) };
-}
-
-async function loadList(){
-  setError("");
-  try{
-    setStatus("読み込み中…");
-    const { start, end } = monthRange(monthEl.value || todayMonthISO());
-    const query = (qEl.value || "").trim().toLowerCase();
-
-    const { data, error } = await sb
-      .from("diaries")
-      .select("*")
-      .eq("couple_id", COUPLE_ID)
-      .gte("date", start)
-      .lte("date", end)
-      .order("date", { ascending:false })
-      .order("created_at", { ascending:false })
-      .limit(200);
-
-    if(error) throw error;
-
-    const filtered = (data || []).filter(d=>{
-      if(!query) return true;
-      return (d.title||"").toLowerCase().includes(query) || (d.body||"").toLowerCase().includes(query);
-    });
-
-    listEl.innerHTML = "";
-    if(filtered.length === 0){
-      const li = document.createElement("li");
-      li.className="muted";
-      li.textContent="この月の日記はありません（または検索にヒットなし）";
-      listEl.appendChild(li);
-      detailMeta.textContent="";
-      detailTitle.textContent="";
-      detailBody.textContent="";
-      deleteBtn.style.display="none";
-      currentDiaryId = null;
-    }else{
-      filtered.forEach(d=>{
-        const li = document.createElement("li");
-
-        const titleH = highlight(d.title || "無題", query);
-        const bodyH = highlight((d.body || "").replace(/\s+/g," ").slice(0,40), query);
-
-        li.innerHTML = `
-          <a>
-            <span class="itemDate">${escapeHtml(d.date)}</span>
-            ：${escapeHtml(titleH)}
-            <div class="muted">${escapeHtml(bodyH)}${(d.body||"").length>40?"…":""}</div>
-          </a>
-        `;
-        li.querySelector("a").addEventListener("click", ()=> showDiary(d));
-        listEl.appendChild(li);
-      });
-
-      showDiary(filtered[0]);
+    // ===== 便利：致命エラーを画面に出す =====
+    const fatalBanner = document.getElementById("fatalBanner");
+    const fatalText = document.getElementById("fatalText");
+    function showFatal(err){
+      fatalBanner.style.display = "block";
+      fatalText.textContent =
+        "ページが止まりました（原因）:\n" +
+        (err && (err.stack || err.message) ? (err.stack || err.message) : String(err));
     }
 
-    setStatus(`OK（${filtered.length}件）`);
-  }catch(err){
-    setStatus("");
-    setError(err.message || String(err));
-  }
-}
+    // DOMContentLoadedで確実にDOMを掴む
+    window.addEventListener("DOMContentLoaded", async ()=>{
+      try{
+        // Supabaseがまだ無い場合は待つ（真っ白防止）
+        if(!window.supabase || !window.supabase.createClient){
+          throw new Error("Supabaseライブラリが読み込めていません（CDNブロック/通信/キャッシュ）。");
+        }
 
-function showDiary(d){
-  currentDiaryId = d.id;
-  deleteBtn.style.display = "inline-block";
-  detailMeta.textContent = `${d.date} / ${new Date(d.created_at).toLocaleString()}`;
-  detailTitle.textContent = d.title || "無題";
-  detailBody.textContent = d.body || "";
-}
+        const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-async function deleteCurrent(){
-  if(!currentDiaryId) return;
-  if(!confirm("この日記を削除します。よろしいですか？")) return;
+        // ===== DOM =====
+        const app = document.getElementById("app");
+        const loginCard = document.getElementById("loginCard");
+        const pw = document.getElementById("pw");
+        const loginBtn = document.getElementById("loginBtn");
+        const autoBtn = document.getElementById("autoBtn");
+        const loginErr = document.getElementById("loginErr");
 
-  setError("");
-  try{
-    setStatus("削除中…");
-    const { error } = await sb.from("diaries").delete().eq("id", currentDiaryId);
-    if(error) throw error;
+        const monthEl = document.getElementById("month");
+        const qEl = document.getElementById("q");
+        const searchBtn = document.getElementById("searchBtn");
+        const listEl = document.getElementById("list");
+        const statusEl = document.getElementById("status");
+        const errorEl = document.getElementById("error");
+        const okEl = document.getElementById("ok");
+        const yearCalendarEl = document.getElementById("yearCalendar");
 
-    currentDiaryId = null;
-    deleteBtn.style.display="none";
-    detailMeta.textContent="";
-    detailTitle.textContent="";
-    detailBody.textContent="";
+        const detailMeta = document.getElementById("detailMeta");
+        const detailTitle = document.getElementById("detailTitle");
+        const detailBody = document.getElementById("detailBody");
+        const deleteBtn = document.getElementById("deleteBtn");
+        const logoutBtn = document.getElementById("logout");
 
-    await loadList();
-    await renderYearCalendar();
-  }catch(err){
-    setStatus("");
-    setError(err.message || String(err));
-  }
-}
+        let currentDiaryId = null;
+        let COUPLE_ID = localStorage.getItem("couple_id") || "";
 
-/* ===== 年間カレンダー ===== */
-async function renderYearCalendar(){
-  const year = new Date().getFullYear();
+        function setStatus(s){ statusEl.textContent = s || ""; }
+        function setError(s){ errorEl.textContent = s || ""; }
+        function setOk(s){ okEl.textContent = s || ""; }
+        function escapeHtml(s){
+          return (s||"").replace(/[&<>"']/g, (c)=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+        }
+        function highlight(text, q){
+          if(!q) return text || "";
+          const esc = q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+          return (text||"").replace(new RegExp(esc,"gi"), m => `【${m}】`);
+        }
+        function todayMonthISO(){
+          const d = new Date();
+          return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+        }
+        function monthRange(monthISO){
+          const [y,m] = monthISO.split("-").map(Number);
+          const start = new Date(y, m-1, 1);
+          const end = new Date(y, m, 0);
+          const toISO = (dt)=> `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}-${String(dt.getDate()).padStart(2,"0")}`;
+          return { start: toISO(start), end: toISO(end) };
+        }
 
-  const { data, error } = await sb
-    .from("diaries")
-    .select("date")
-    .eq("couple_id", COUPLE_ID)
-    .gte("date", `${year}-01-01`)
-    .lte("date", `${year}-12-31`);
+        async function loadBackground(){
+          try{
+            const { data, error } = await sb
+              .from("couple_settings")
+              .select("*")
+              .eq("couple_id", COUPLE_ID)
+              .maybeSingle();
+            if(error) return;
+            if(data && data.background_url){
+              document.body.style.background = `url(${data.background_url}) center/cover fixed`;
+            }
+          }catch(_){}
+        }
 
-  if(error) return;
+        async function loadList(){
+          setError(""); setOk("");
+          try{
+            setStatus("読み込み中…");
+            const { start, end } = monthRange(monthEl.value || todayMonthISO());
+            const query = (qEl.value || "").trim().toLowerCase();
 
-  const byMonth = Array.from({length:12}, ()=>[]);
-  (data||[]).forEach(r=>{
-    const [y,m,d] = r.date.split("-").map(Number);
-    if(y !== year) return;
-    byMonth[m-1].push(d);
-  });
+            const { data, error } = await sb
+              .from("diaries")
+              .select("*")
+              .eq("couple_id", COUPLE_ID)
+              .gte("date", start)
+              .lte("date", end)
+              .order("date", { ascending:false })
+              .order("created_at", { ascending:false })
+              .limit(200);
 
-  yearCalendarEl.innerHTML = "";
-  for(let m=0;m<12;m++){
-    const box = document.createElement("div");
-    box.className = "monthBox";
+            if(error) throw error;
 
-    const title = document.createElement("div");
-    title.innerHTML = `<b>${m+1}月</b>`;
-    box.appendChild(title);
+            const filtered = (data || []).filter(d=>{
+              if(!query) return true;
+              return (d.title||"").toLowerCase().includes(query) || (d.body||"").toLowerCase().includes(query);
+            });
 
-    const days = Array.from(new Set(byMonth[m])).sort((a,b)=>a-b);
-    const row = document.createElement("div");
-    row.className = "dotsRow";
+            listEl.innerHTML = "";
+            if(filtered.length === 0){
+              const li = document.createElement("li");
+              li.className="muted";
+              li.textContent="この月の日記はありません（または検索にヒットなし）";
+              listEl.appendChild(li);
+              detailMeta.textContent="";
+              detailTitle.textContent="";
+              detailBody.textContent="";
+              deleteBtn.style.display="none";
+              currentDiaryId = null;
+            }else{
+              filtered.forEach(d=>{
+                const li = document.createElement("li");
+                const titleH = highlight(d.title || "無題", query);
+                const bodyH = highlight((d.body || "").replace(/\s+/g," ").slice(0,40), query);
 
-    days.forEach(day=>{
-      const dot = document.createElement("div");
-      dot.className = "dayDot";
-      dot.textContent = day;
+                li.innerHTML = `
+                  <a>
+                    <span class="itemDate">${escapeHtml(d.date)}</span>
+                    ：${escapeHtml(titleH)}
+                    <div class="muted">${escapeHtml(bodyH)}${(d.body||"").length>40?"…":""}</div>
+                  </a>
+                `;
+                li.querySelector("a").addEventListener("click", ()=> showDiary(d));
+                listEl.appendChild(li);
+              });
+              showDiary(filtered[0]);
+            }
 
-      dot.onclick = ()=>{
-        monthEl.value = `${year}-${String(m+1).padStart(2,"0")}`;
-        loadList();
-      };
+            setStatus(`OK（${filtered.length}件）`);
+          }catch(err){
+            setStatus("");
+            setError(err.message || String(err));
+          }
+        }
 
-      row.appendChild(dot);
+        function showDiary(d){
+          currentDiaryId = d.id;
+          deleteBtn.style.display = "inline-block";
+          detailMeta.textContent = `${d.date} / ${new Date(d.created_at).toLocaleString()}`;
+          detailTitle.textContent = d.title || "無題";
+          detailBody.textContent = d.body || "";
+        }
+
+        async function deleteCurrent(){
+          if(!currentDiaryId) return;
+          if(!confirm("この日記を削除します。よろしいですか？")) return;
+
+          setError(""); setOk("");
+          try{
+            setStatus("削除中…");
+            const { error } = await sb.from("diaries").delete().eq("id", currentDiaryId);
+            if(error) throw error;
+
+            currentDiaryId = null;
+            deleteBtn.style.display="none";
+            detailMeta.textContent="";
+            detailTitle.textContent="";
+            detailBody.textContent="";
+
+            await loadList();
+            await renderYearCalendar();
+            setOk("削除しました。");
+          }catch(err){
+            setStatus("");
+            setError(err.message || String(err));
+          }
+        }
+
+        async function renderYearCalendar(){
+          const year = new Date().getFullYear();
+          const { data, error } = await sb
+            .from("diaries")
+            .select("date")
+            .eq("couple_id", COUPLE_ID)
+            .gte("date", `${year}-01-01`)
+            .lte("date", `${year}-12-31`);
+
+          if(error) return;
+
+          const byMonth = Array.from({length:12}, ()=>[]);
+          (data||[]).forEach(r=>{
+            const [y,m,d] = r.date.split("-").map(Number);
+            if(y !== year) return;
+            byMonth[m-1].push(d);
+          });
+
+          yearCalendarEl.innerHTML = "";
+          for(let m=0;m<12;m++){
+            const box = document.createElement("div");
+            box.className = "monthBox";
+
+            const title = document.createElement("div");
+            title.innerHTML = `<b>${m+1}月</b>`;
+            box.appendChild(title);
+
+            const days = Array.from(new Set(byMonth[m])).sort((a,b)=>a-b);
+            const row = document.createElement("div");
+            row.className = "dotsRow";
+
+            days.forEach(day=>{
+              const dot = document.createElement("div");
+              dot.className = "dayDot";
+              dot.textContent = day;
+              dot.onclick = ()=>{
+                monthEl.value = `${year}-${String(m+1).padStart(2,"0")}`;
+                loadList();
+              };
+              row.appendChild(dot);
+            });
+
+            box.appendChild(row);
+            yearCalendarEl.appendChild(box);
+          }
+        }
+
+        function showLogin(){
+          app.style.display = "none";
+          loginCard.style.display = "block";
+          loginErr.textContent = "";
+        }
+        async function enterApp(){
+          loginCard.style.display = "none";
+          app.style.display = "block";
+
+          monthEl.value = todayMonthISO();
+          await loadBackground();
+          await loadList();
+          await renderYearCalendar();
+        }
+
+        // ===== イベント =====
+        searchBtn.addEventListener("click", loadList);
+        monthEl.addEventListener("change", loadList);
+        qEl.addEventListener("keydown", (e)=>{ if(e.key==="Enter") loadList(); });
+        deleteBtn.addEventListener("click", deleteCurrent);
+
+        logoutBtn.addEventListener("click", ()=>{
+          localStorage.removeItem("couple_id");
+          location.reload();
+        });
+
+        loginBtn.addEventListener("click", async ()=>{
+          const v = (pw.value || "").trim();
+          // 固定運用：合言葉が一致したらOK
+          if(v !== FIXED_COUPLE_ID){
+            loginErr.textContent = "合言葉が違います（正：kentaria）";
+            return;
+          }
+          COUPLE_ID = FIXED_COUPLE_ID;
+          localStorage.setItem("couple_id", COUPLE_ID);
+          await enterApp();
+        });
+
+        autoBtn.addEventListener("click", async ()=>{
+          COUPLE_ID = FIXED_COUPLE_ID;
+          localStorage.setItem("couple_id", COUPLE_ID);
+          await enterApp();
+        });
+
+        // ===== 起動 =====
+        // すでにログイン済みなら入る。なければログインカード。
+        if(!COUPLE_ID){
+          showLogin();
+        }else{
+          await enterApp();
+        }
+
+      }catch(err){
+        showFatal(err);
+      }
     });
-
-    box.appendChild(row);
-    yearCalendarEl.appendChild(box);
-  }
-}
-
-/* ===== events ===== */
-searchBtn.addEventListener("click", loadList);
-monthEl.addEventListener("change", loadList);
-qEl.addEventListener("keydown", (e)=>{ if(e.key==="Enter") loadList(); });
-deleteBtn.addEventListener("click", deleteCurrent);
-
-logoutBtn.addEventListener("click", ()=>{
-  localStorage.removeItem("couple_id");
-  location.href="./index.html";
-});
-
-/* ===== init ===== */
-(function init(){
-  if(!COUPLE_ID){
-    needLogin.style.display="block";
-    app.style.display="none";
-    return;
-  }
-  needLogin.style.display="none";
-  app.style.display="block";
-
-  monthEl.value = todayMonthISO();
-  loadList();
-  loadBackground();
-  renderYearCalendar();
-})();
-</script>
+  })();
+  </script>
 </body>
 </html>
