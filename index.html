@@ -3,61 +3,136 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Couple OS (Shared MVP)</title>
+  <title>Couple OS（ToDo＋日記）</title>
   <style>
-    body{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Hiragino Sans",sans-serif;max-width:760px;margin:40px auto;padding:0 16px}
+    body{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Hiragino Sans",sans-serif;max-width:860px;margin:36px auto;padding:0 16px}
     h1{font-size:22px;margin:0 0 6px}
+    h2{font-size:16px;margin:0 0 8px}
     small{color:#666}
     .card{border:1px solid #ddd;border-radius:14px;padding:12px;margin-top:12px}
     .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-    input{padding:10px;border:1px solid #ccc;border-radius:10px}
+    input, textarea{padding:10px;border:1px solid #ccc;border-radius:10px}
     input[type="text"]{flex:1;min-width:220px}
+    textarea{width:100%;min-height:96px;resize:vertical}
     button{padding:10px 14px;border:0;border-radius:10px;cursor:pointer}
     ul{padding-left:18px;margin:10px 0}
     li{margin:8px 0}
     .done{text-decoration:line-through;opacity:.6}
     .muted{opacity:.7}
     .err{color:#b00020}
+    .ok{color:#0a7a3d}
+    .grid{display:grid;grid-template-columns:1fr;gap:12px}
+    @media (min-width:900px){ .grid{grid-template-columns:1fr 1fr} }
+    .pill{display:inline-block;padding:4px 10px;border-radius:999px;background:#f3f3f3;margin-right:6px;font-size:12px}
   </style>
 
-  <!-- Supabase JS v2 (CDN) -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
-  <h1>Couple OS（共有ToDo / MVP）</h1>
-  <small>二人で同じ <b>合言葉</b> を入れると同じToDoが見えます。</small>
+  <h1>Couple OS（共有ToDo＋日記 / MVP）</h1>
+  <small>二人で同じ <b>合言葉</b> を入れると同じToDo・日記が見えます。</small>
 
   <div class="card">
     <div class="row">
       <label class="muted">合言葉（couple_id）</label>
       <input id="couple" placeholder="例：riadaisuki（2人で同じの）" />
       <button id="saveCouple">保存</button>
+      <span id="coupleSaved" class="pill muted">未保存</span>
     </div>
-    <small class="muted">※合言葉は推測されにくい文字列にすると安心（英数字・長め推奨）</small>
+    <small class="muted">※推測されにくい文字列にすると安心</small>
   </div>
 
-  <div class="card">
-    <div class="row">
-      <input id="txt" type="text" placeholder="例：牛乳買う / 病院に電話 / デート予約" />
-      <button id="add">追加</button>
+  <div class="grid">
+    <!-- ToDo -->
+    <div class="card">
+      <h2>ToDo</h2>
+      <div class="row">
+        <input id="txt" type="text" placeholder="例：牛乳買う / 病院に電話 / デート予約" />
+        <button id="add">追加</button>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <button id="reload">更新</button>
+        <small id="status" class="muted"></small>
+        <small id="error" class="err"></small>
+      </div>
+
+      <div class="card" style="margin-top:12px;background:#fafafa">
+        <h2 style="margin:0 0 6px">21:00 未完了一覧（ページ内）</h2>
+        <small class="muted">通知はまだ無し。21:00以降に開くと、未完了をまとめて表示します。</small>
+        <div style="margin-top:8px">
+          <small class="muted">いまの判定：</small>
+          <small id="summaryGate" class="muted"></small>
+        </div>
+        <ul id="summaryList"></ul>
+      </div>
+
+      <ul id="list"></ul>
     </div>
-    <div class="row" style="margin-top:10px">
-      <button id="reload">更新</button>
-      <small id="status" class="muted"></small>
-      <small id="error" class="err"></small>
+
+    <!-- Diary -->
+    <div class="card">
+      <h2>日記（共有）</h2>
+      <div class="row">
+        <label class="muted">日付</label>
+        <input id="diaryDate" type="date" />
+        <button id="loadDiary">表示</button>
+      </div>
+
+      <div class="row" style="margin-top:10px">
+        <input id="diaryTitle" type="text" placeholder="タイトル（例：今日はいい日）" />
+      </div>
+      <div style="margin-top:10px">
+        <textarea id="diaryBody" placeholder="本文（雑でOK）"></textarea>
+      </div>
+
+      <div class="row" style="margin-top:10px">
+        <button id="saveDiary">保存</button>
+        <button id="deleteDiary">削除</button>
+        <button id="aiFormat" disabled>AIで整形（後で）</button>
+        <small id="diaryStatus" class="muted"></small>
+        <small id="diaryError" class="err"></small>
+      </div>
+
+      <div class="card" style="margin-top:12px;background:#fafafa">
+        <h2 style="margin:0 0 6px">最近の日記</h2>
+        <ul id="diaryList"></ul>
+      </div>
     </div>
-    <ul id="list"></ul>
   </div>
 
   <script>
-    // ======= Supabase設定（あなたの値） =======
+    // ===== Supabase設定 =====
     const SUPABASE_URL = "https://eycneuftjdooykzjbioy.supabase.co";
     const SUPABASE_ANON_KEY = "sb_publishable_ySwVIipmFAvN6VGexnR0PQ_RDsZ4M2Z";
     const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    // ======= UI =======
+    // ===== 共通UI =====
     const coupleInput = document.getElementById("couple");
     const saveCoupleBtn = document.getElementById("saveCouple");
+    const coupleSaved = document.getElementById("coupleSaved");
+    const COUPLE_KEY = "couple_os_couple_id";
+
+    function setPillSaved(saved){
+      coupleSaved.textContent = saved ? "保存済み" : "未保存";
+      coupleSaved.className = "pill " + (saved ? "ok" : "muted");
+    }
+
+    function getCoupleId(){ return (coupleInput.value || "").trim(); }
+    function loadCoupleId(){
+      const v = localStorage.getItem(COUPLE_KEY) || "";
+      coupleInput.value = v || "riadaisuki";
+      setPillSaved(!!v);
+      return coupleInput.value;
+    }
+    function saveCoupleId(){
+      const v = getCoupleId();
+      if(!v){ alert("合言葉（couple_id）を入力してください"); return; }
+      localStorage.setItem(COUPLE_KEY, v);
+      setPillSaved(true);
+      renderAll();
+    }
+
+    // ===== ToDo =====
     const txt = document.getElementById("txt");
     const addBtn = document.getElementById("add");
     const reloadBtn = document.getElementById("reload");
@@ -65,37 +140,11 @@
     const statusEl = document.getElementById("status");
     const errorEl = document.getElementById("error");
 
-    const COUPLE_KEY = "couple_os_couple_id";
+    const summaryGate = document.getElementById("summaryGate");
+    const summaryList = document.getElementById("summaryList");
 
     function setStatus(msg){ statusEl.textContent = msg || ""; }
     function setError(msg){ errorEl.textContent = msg || ""; }
-
-    function getCoupleId(){
-      return (coupleInput.value || "").trim();
-    }
-
-    function loadCoupleId(){
-      const v = localStorage.getItem(COUPLE_KEY) || "";
-      if (v) {
-        coupleInput.value = v;
-      } else {
-        // 合言葉が未設定なら、例として riadaisuki を入れておく（消してもOK）
-        coupleInput.value = "riadaisuki";
-      }
-      return coupleInput.value;
-    }
-
-    function saveCoupleId(){
-      const v = getCoupleId();
-      if(!v){
-        setError("合言葉（couple_id）を入力してください");
-        return;
-      }
-      localStorage.setItem(COUPLE_KEY, v);
-      setError("");
-      setStatus("合言葉を保存しました。『更新』で共有ToDoが出ます。");
-      render();
-    }
 
     async function fetchTodos(coupleId){
       const { data, error } = await sb
@@ -103,50 +152,73 @@
         .select("*")
         .eq("couple_id", coupleId)
         .order("created_at", { ascending: false });
-
       if(error) throw error;
       return data || [];
     }
-
     async function addTodo(coupleId, title){
-      const { error } = await sb
-        .from("todos")
-        .insert([{ couple_id: coupleId, title, done: false }]);
+      const { error } = await sb.from("todos").insert([{ couple_id: coupleId, title, done: false }]);
       if(error) throw error;
     }
-
     async function toggleTodo(id, done){
-      const { error } = await sb
-        .from("todos")
-        .update({ done })
-        .eq("id", id);
+      const { error } = await sb.from("todos").update({ done }).eq("id", id);
       if(error) throw error;
     }
-
     async function deleteTodo(id){
-      const { error } = await sb
-        .from("todos")
-        .delete()
-        .eq("id", id);
+      const { error } = await sb.from("todos").delete().eq("id", id);
       if(error) throw error;
     }
 
-    async function render(){
-      const coupleId = getCoupleId() || localStorage.getItem(COUPLE_KEY) || "";
-      coupleInput.value = coupleId;
+    function escapeHtml(s){
+      return s.replace(/[&<>"']/g, (c)=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+    }
 
-      list.innerHTML = "";
-      setError("");
+    function isAfter21(){
+      const now = new Date();
+      const h = now.getHours();
+      const m = now.getMinutes();
+      // 21:00 以降
+      return (h > 21) || (h === 21 && m >= 0);
+    }
 
-      if(!coupleId){
-        setStatus("まず合言葉（couple_id）を保存してください。");
+    function renderSummary(items){
+      summaryList.innerHTML = "";
+      const gate = isAfter21();
+      summaryGate.textContent = gate ? "21:00以降（まとめ表示ON）" : "21:00前（まとめ表示OFF）";
+      if(!gate) return;
+
+      const open = items.filter(x => !x.done);
+      if(open.length === 0){
+        const li = document.createElement("li");
+        li.textContent = "未完了はありません（最高）";
+        summaryList.appendChild(li);
         return;
       }
+      open.slice(0, 7).forEach(it => {
+        const li = document.createElement("li");
+        li.textContent = it.title;
+        summaryList.appendChild(li);
+      });
+      if(open.length > 7){
+        const li = document.createElement("li");
+        li.className = "muted";
+        li.textContent = `ほか ${open.length - 7} 件…`;
+        summaryList.appendChild(li);
+      }
+    }
+
+    async function renderTodos(){
+      const coupleId = getCoupleId() || localStorage.getItem(COUPLE_KEY) || "";
+      setError("");
+      list.innerHTML = "";
+      summaryList.innerHTML = "";
+      if(!coupleId){ setStatus("合言葉を保存してください"); return; }
 
       try{
         setStatus("読み込み中…");
         const items = await fetchTodos(coupleId);
         setStatus(`件数：${items.length}`);
+
+        renderSummary(items);
 
         items.forEach(it => {
           const li = document.createElement("li");
@@ -158,25 +230,14 @@
               <button>削除</button>
             </label>
           `;
-
           li.querySelector("input").addEventListener("change", async (e)=>{
-            try{
-              await toggleTodo(it.id, e.target.checked);
-              render();
-            }catch(err){
-              setError(err.message || String(err));
-            }
+            try{ await toggleTodo(it.id, e.target.checked); renderAll(); }
+            catch(err){ setError(err.message || String(err)); }
           });
-
           li.querySelector("button").addEventListener("click", async ()=>{
-            try{
-              await deleteTodo(it.id);
-              render();
-            }catch(err){
-              setError(err.message || String(err));
-            }
+            try{ await deleteTodo(it.id); renderAll(); }
+            catch(err){ setError(err.message || String(err)); }
           });
-
           list.appendChild(li);
         });
 
@@ -186,40 +247,189 @@
       }
     }
 
-    function escapeHtml(s){
-      return s.replace(/[&<>"']/g, (c)=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
-    }
-
     async function onAdd(){
       const coupleId = getCoupleId() || localStorage.getItem(COUPLE_KEY) || "";
-      if(!coupleId){
-        setError("合言葉（couple_id）を保存してください");
-        return;
-      }
+      if(!coupleId){ setError("合言葉を保存してください"); return; }
       const v = (txt.value || "").trim();
       if(!v) return;
-
       try{
-        setError("");
-        setStatus("追加中…");
+        setError(""); setStatus("追加中…");
         await addTodo(coupleId, v);
         txt.value = "";
-        render();
+        renderAll();
       }catch(err){
-        setStatus("");
-        setError("追加エラー：" + (err.message || String(err)));
+        setStatus(""); setError("追加エラー：" + (err.message || String(err)));
       }
+    }
+
+    // ===== Diary =====
+    const diaryDate = document.getElementById("diaryDate");
+    const diaryTitle = document.getElementById("diaryTitle");
+    const diaryBody = document.getElementById("diaryBody");
+    const loadDiaryBtn = document.getElementById("loadDiary");
+    const saveDiaryBtn = document.getElementById("saveDiary");
+    const deleteDiaryBtn = document.getElementById("deleteDiary");
+    const aiFormatBtn = document.getElementById("aiFormat");
+    const diaryStatus = document.getElementById("diaryStatus");
+    const diaryError = document.getElementById("diaryError");
+    const diaryList = document.getElementById("diaryList");
+
+    function setDiaryStatus(msg){ diaryStatus.textContent = msg || ""; }
+    function setDiaryError(msg){ diaryError.textContent = msg || ""; }
+
+    function todayISO(){
+      const d = new Date();
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth()+1).padStart(2,"0");
+      const dd = String(d.getDate()).padStart(2,"0");
+      return `${yyyy}-${mm}-${dd}`;
+    }
+
+    async function fetchDiary(coupleId, date){
+      const { data, error } = await sb
+        .from("diaries")
+        .select("*")
+        .eq("couple_id", coupleId)
+        .eq("date", date)
+        .order("created_at", { ascending: false })
+        .limit(1);
+      if(error) throw error;
+      return (data && data[0]) || null;
+    }
+
+    async function upsertDiary(coupleId, date, title, body){
+      const { error } = await sb.from("diaries").insert([{
+        couple_id: coupleId,
+        date,
+        title,
+        body
+      }]);
+      if(error) throw error;
+    }
+
+    async function deleteDiaryById(id){
+      const { error } = await sb.from("diaries").delete().eq("id", id);
+      if(error) throw error;
+    }
+
+    async function listRecentDiaries(coupleId){
+      const { data, error } = await sb
+        .from("diaries")
+        .select("*")
+        .eq("couple_id", coupleId)
+        .order("created_at", { ascending: false })
+        .limit(7);
+      if(error) throw error;
+      return data || [];
+    }
+
+    let currentDiaryId = null;
+
+    async function loadDiary(){
+      const coupleId = getCoupleId() || localStorage.getItem(COUPLE_KEY) || "";
+      if(!coupleId){ setDiaryError("合言葉を保存してください"); return; }
+      const date = diaryDate.value || todayISO();
+      diaryDate.value = date;
+
+      try{
+        setDiaryError(""); setDiaryStatus("読み込み中…");
+        const d = await fetchDiary(coupleId, date);
+        if(!d){
+          currentDiaryId = null;
+          diaryTitle.value = "";
+          diaryBody.value = "";
+          setDiaryStatus("この日の記録はまだありません。書いて保存してね。");
+        }else{
+          currentDiaryId = d.id;
+          diaryTitle.value = d.title;
+          diaryBody.value = d.body;
+          setDiaryStatus("読み込みました。");
+        }
+        await renderDiaryList();
+      }catch(err){
+        setDiaryStatus("");
+        setDiaryError("日記エラー：" + (err.message || String(err)));
+      }
+    }
+
+    async function saveDiary(){
+      const coupleId = getCoupleId() || localStorage.getItem(COUPLE_KEY) || "";
+      if(!coupleId){ setDiaryError("合言葉を保存してください"); return; }
+      const date = diaryDate.value || todayISO();
+      diaryDate.value = date;
+
+      const title = (diaryTitle.value || "").trim() || "無題";
+      const body = (diaryBody.value || "").trim();
+      if(!body){ setDiaryError("本文が空です"); return; }
+
+      try{
+        setDiaryError(""); setDiaryStatus("保存中…");
+        // MVPでは「追記型」でinsert（履歴が残る）
+        await upsertDiary(coupleId, date, title, body);
+        setDiaryStatus("保存しました。");
+        await loadDiary();
+      }catch(err){
+        setDiaryStatus("");
+        setDiaryError("保存エラー：" + (err.message || String(err)));
+      }
+    }
+
+    async function deleteDiary(){
+      if(!currentDiaryId){ setDiaryError("削除する日記がありません"); return; }
+      try{
+        setDiaryError(""); setDiaryStatus("削除中…");
+        await deleteDiaryById(currentDiaryId);
+        currentDiaryId = null;
+        diaryTitle.value = "";
+        diaryBody.value = "";
+        setDiaryStatus("削除しました。");
+        await renderDiaryList();
+      }catch(err){
+        setDiaryStatus("");
+        setDiaryError("削除エラー：" + (err.message || String(err)));
+      }
+    }
+
+    async function renderDiaryList(){
+      const coupleId = getCoupleId() || localStorage.getItem(COUPLE_KEY) || "";
+      diaryList.innerHTML = "";
+      if(!coupleId) return;
+
+      const items = await listRecentDiaries(coupleId);
+      items.forEach(it => {
+        const li = document.createElement("li");
+        li.innerHTML = `<b>${it.date}</b>：${escapeHtml(it.title)} <span class="muted">(${new Date(it.created_at).toLocaleString()})</span>`;
+        li.style.cursor = "pointer";
+        li.addEventListener("click", ()=>{
+          diaryDate.value = it.date;
+          // クリックでその日をロード
+          loadDiary();
+        });
+        diaryList.appendChild(li);
+      });
+    }
+
+    // ===== 全体 =====
+    async function renderAll(){
+      await renderTodos();
+      await renderDiaryList();
     }
 
     // イベント
     saveCoupleBtn.addEventListener("click", saveCoupleId);
-    reloadBtn.addEventListener("click", render);
+    reloadBtn.addEventListener("click", renderAll);
     addBtn.addEventListener("click", onAdd);
     txt.addEventListener("keydown", (e)=>{ if(e.key === "Enter") onAdd(); });
 
+    loadDiaryBtn.addEventListener("click", loadDiary);
+    saveDiaryBtn.addEventListener("click", saveDiary);
+    deleteDiaryBtn.addEventListener("click", deleteDiary);
+    aiFormatBtn.addEventListener("click", ()=>alert("AI整形は次のステップで追加するよ（まずは手動日記でOK）"));
+
     // 初期表示
     loadCoupleId();
-    render();
+    diaryDate.value = todayISO();
+    renderAll();
   </script>
 </body>
 </html>
