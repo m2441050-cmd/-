@@ -61,7 +61,14 @@
         <label class="muted">検索</label>
         <input id="q" type="text" placeholder="例：旅行 / しんどい / プレゼント" style="flex:1;min-width:220px" />
         <button id="searchBtn" type="button">検索</button>
-      </div>
+      </div>　
+      <!-- ▼ 年間カレンダー（日記がある日に印） -->
+<div class="card">
+  <h2>📆 年間カレンダー</h2>
+  <div id="yearCalendar"
+       style="display:grid;grid-template-columns:repeat(12,1fr);gap:8px">
+  </div>
+</div>
       <div class="row" style="margin-top:8px">
         <div class="muted" id="status"></div>
         <div class="err" id="error"></div>
@@ -118,7 +125,15 @@ function setError(s){ errorEl.textContent = s || ""; }
 function escapeHtml(s){
   return (s||"").replace(/[&<>"']/g, (c)=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
 }
-
+function highlight(text, q){
+  if(!q) return text;
+  const esc = q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return text.replace(
+    new RegExp(esc,"gi"),
+    m => `【${m}】`
+  );
+}
+  
 function todayMonthISO(){
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
@@ -166,8 +181,11 @@ async function loadList(){
     }else{
       filtered.forEach(d=>{
         const li = document.createElement("li");
-        const title = d.title || "無題";
-        const bodyPreview = (d.body || "").replace(/\s+/g," ").slice(0,40);
+       const title = highlight(d.title || "無題", query);
+const bodyPreview = highlight(
+  (d.body || "").replace(/\s+/g," ").slice(0,40),
+  query
+);
         li.innerHTML = `
           <a>
             <span class="itemDate">${escapeHtml(d.date)}</span>
@@ -219,6 +237,48 @@ async function deleteCurrent(){
     setError(err.message || String(err));
   }
 }
+  // ★ ここから貼る
+async function renderYearCalendar(){
+  const year = new Date().getFullYear();
+
+  const { data } = await sb
+    .from("diaries")
+    .select("date")
+    .eq("couple_id", COUPLE_ID)
+    .gte("date", `${year}-01-01`)
+    .lte("date", `${year}-12-31`);
+
+  if(error) return;
+
+  const set = new Set((data||[]).map(d=>d.date));
+  const wrap = document.getElementById("yearCalendar");
+  wrap.innerHTML = "";
+
+  for(let m=0;m<12;m++){
+    const box = document.createElement("div");
+    box.innerHTML = `<b>${m+1}月</b>`;
+
+    for(let d=1; d<=31; d++){
+      const iso =
+        `${year}-${String(m+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+
+      if(!set.has(iso)) continue;
+
+      const dot = document.createElement("div");
+      dot.textContent = "● " + d;
+      dot.style.cursor = "pointer";
+
+      dot.onclick = ()=>{
+        monthEl.value = `${year}-${String(m+1).padStart(2,"0")}`;
+        loadList();
+      };
+
+      box.appendChild(dot);
+    }
+    wrap.appendChild(box);
+  }
+}
+// ★ ここまで
 
 searchBtn.addEventListener("click", loadList);
 monthEl.addEventListener("change", loadList);
@@ -241,7 +301,7 @@ logoutBtn.addEventListener("click", ()=>{
   app.style.display="block";
   monthEl.value = todayMonthISO();
   loadList();
-})();
+  renderYearCalendar(); // ★これ})();
 </script>
 </body>
 </html>
