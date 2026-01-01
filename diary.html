@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>日記を見返す - Couple OS</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    body{
+      font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans",sans-serif;
+      max-width:1100px;margin:28px auto;padding:0 16px;
+      background:linear-gradient(160deg,#f6f2ff,#ffffff);
+    }
+    h1{font-size:22px;margin:0 0 8px}
+    .muted{opacity:.7;font-size:13px}
+    .err{color:#b00020;font-size:13px}
+    .card{
+      background:#fff;border-radius:18px;padding:16px;margin:14px 0;
+      box-shadow:0 12px 30px rgba(0,0,0,.06);
+    }
+    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+    input,button,textarea{
+      padding:10px 12px;border-radius:10px;border:1px solid #ccc;font-size:14px;
+    }
+    button{cursor:pointer;background:#7b6cff;color:#fff;border:none}
+    button.ghost{background:#fff;color:#333;border:1px solid #ddd}
+    button.sub{background:#aaa}
+    .grid{display:grid;grid-template-columns:1fr;gap:14px}
+    @media (min-width:980px){ .grid{grid-template-columns:420px 1fr} }
+    ul{padding-left:18px;margin:8px 0}
+    li{margin:8px 0}
+    li a{cursor:pointer;text-decoration:none;color:#333}
+    li a:hover{text-decoration:underline}
+    .itemDate{font-weight:700}
+    .preview{white-space:pre-wrap;line-height:1.6}
+  </style>
+</head>
+
+<body>
+  <div class="row" style="justify-content:space-between">
+    <div>
+      <h1>📔 日記を見返す</h1>
+      <div class="muted">月で絞り込み＆検索できます</div>
+    </div>
+    <div class="row">
+      <button class="ghost" type="button" onclick="location.href='./index.html'">← 戻る</button>
+      <button class="ghost" type="button" id="logout">ログアウト</button>
+    </div>
+  </div>
+
+  <div class="card" id="needLogin" style="display:none">
+    <div class="err">共有IDが未設定です。先にトップ（index）でログインしてください。</div>
+    <button class="ghost" type="button" onclick="location.href='./index.html'">トップへ</button>
+  </div>
+
+  <div id="app" style="display:none">
+    <div class="card">
+      <div class="row">
+        <label class="muted">月</label>
+        <input id="month" type="month" />
+        <label class="muted">検索</label>
+        <input id="q" type="text" placeholder="例：旅行 / しんどい / プレゼント" style="flex:1;min-width:220px" />
+        <button id="searchBtn" type="button">検索</button>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <div class="muted" id="status"></div>
+        <div class="err" id="error"></div>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <h1 style="font-size:16px;margin:0 0 8px">一覧</h1>
+        <ul id="list"></ul>
+      </div>
+
+      <div class="card">
+        <div class="row" style="justify-content:space-between">
+          <h1 style="font-size:16px;margin:0">表示</h1>
+          <button class="sub" id="deleteBtn" type="button" style="display:none">この日記を削除</button>
+        </div>
+        <div class="muted" id="detailMeta"></div>
+        <h2 id="detailTitle" style="margin:10px 0 0"></h2>
+        <div id="detailBody" class="preview" style="margin-top:10px"></div>
+      </div>
+    </div>
+  </div>
+
+<script>
+/* ===== Supabase ===== */
+const SUPABASE_URL = "https://eycneuftjdooykzjbioy.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_ySwVIipmFAvN6VGexnR0PQ_RDsZ4M2Z";
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+let COUPLE_ID = localStorage.getItem("couple_id") || "";
+
+/* ===== DOM ===== */
+const needLogin = document.getElementById("needLogin");
+const app = document.getElementById("app");
+
+const monthEl = document.getElementById("month");
+const qEl = document.getElementById("q");
+const searchBtn = document.getElementById("searchBtn");
+const listEl = document.getElementById("list");
+const statusEl = document.getElementById("status");
+const errorEl = document.getElementById("error");
+
+const detailMeta = document.getElementById("detailMeta");
+const detailTitle = document.getElementById("detailTitle");
+const detailBody = document.getElementById("detailBody");
+const deleteBtn = document.getElementById("deleteBtn");
+const logoutBtn = document.getElementById("logout");
+
+let currentDiaryId = null;
+
+function setStatus(s){ statusEl.textContent = s || ""; }
+function setError(s){ errorEl.textContent = s || ""; }
+function escapeHtml(s){
+  return (s||"").replace(/[&<>"']/g, (c)=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+}
+
+function todayMonthISO(){
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+}
+
+function monthRange(monthISO){
+  const [y,m] = monthISO.split("-").map(Number);
+  const start = new Date(y, m-1, 1);
+  const end = new Date(y, m, 0); // 月末
+  const toISO = (dt)=> `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}-${String(dt.getDate()).padStart(2,"0")}`;
+  return { start: toISO(start), end: toISO(end) };
+}
+
+async function loadList(){
+  setError("");
+  try{
+    setStatus("読み込み中…");
+    const { start, end } = monthRange(monthEl.value || todayMonthISO());
+    const query = (qEl.value || "").trim().toLowerCase();
+
+    const { data, error } = await sb
+      .from("diaries")
+      .select("*")
+      .eq("couple_id", COUPLE_ID)
+      .gte("date", start)
+      .lte("date", end)
+      .order("date", { ascending:false })
+      .order("created_at", { ascending:false })
+      .limit(200);
+
+    if(error) throw error;
+
+    // クライアント側検索（タイトル/本文）
+    const filtered = (data || []).filter(d=>{
+      if(!query) return true;
+      return (d.title||"").toLowerCase().includes(query) || (d.body||"").toLowerCase().includes(query);
+    });
+
+    listEl.innerHTML = "";
+    if(filtered.length === 0){
+      const li = document.createElement("li");
+      li.className="muted";
+      li.textContent="この月の日記はありません（または検索にヒットなし）";
+      listEl.appendChild(li);
+    }else{
+      filtered.forEach(d=>{
+        const li = document.createElement("li");
+        const title = d.title || "無題";
+        const bodyPreview = (d.body || "").replace(/\s+/g," ").slice(0,40);
+        li.innerHTML = `
+          <a>
+            <span class="itemDate">${escapeHtml(d.date)}</span>
+            ：${escapeHtml(title)}
+            <div class="muted">${escapeHtml(bodyPreview)}${(d.body||"").length>40?"…":""}</div>
+          </a>
+        `;
+        li.querySelector("a").addEventListener("click", ()=>{
+          showDiary(d);
+        });
+        listEl.appendChild(li);
+      });
+      // 先頭を自動表示
+      showDiary(filtered[0]);
+    }
+
+    setStatus(`OK（${filtered.length}件）`);
+  }catch(err){
+    setStatus("");
+    setError(err.message || String(err));
+  }
+}
+
+function showDiary(d){
+  currentDiaryId = d.id;
+  deleteBtn.style.display = "inline-block";
+  detailMeta.textContent = `${d.date} / ${new Date(d.created_at).toLocaleString()}`;
+  detailTitle.textContent = d.title || "無題";
+  detailBody.textContent = d.body || "";
+}
+
+async function deleteCurrent(){
+  if(!currentDiaryId) return;
+  if(!confirm("この日記を削除します。よろしいですか？")) return;
+
+  setError("");
+  try{
+    setStatus("削除中…");
+    const { error } = await sb.from("diaries").delete().eq("id", currentDiaryId);
+    if(error) throw error;
+    currentDiaryId = null;
+    deleteBtn.style.display="none";
+    detailMeta.textContent="";
+    detailTitle.textContent="";
+    detailBody.textContent="";
+    await loadList();
+  }catch(err){
+    setStatus("");
+    setError(err.message || String(err));
+  }
+}
+
+searchBtn.addEventListener("click", loadList);
+monthEl.addEventListener("change", loadList);
+qEl.addEventListener("keydown", (e)=>{ if(e.key==="Enter") loadList(); });
+deleteBtn.addEventListener("click", deleteCurrent);
+
+logoutBtn.addEventListener("click", ()=>{
+  localStorage.removeItem("couple_id");
+  location.href="./index.html";
+});
+
+/* ===== init ===== */
+(function init(){
+  if(!COUPLE_ID){
+    needLogin.style.display="block";
+    app.style.display="none";
+    return;
+  }
+  needLogin.style.display="none";
+  app.style.display="block";
+  monthEl.value = todayMonthISO();
+  loadList();
+})();
+</script>
+</body>
+</html>
