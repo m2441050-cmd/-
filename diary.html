@@ -4,28 +4,42 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Couple Timeline</title>
+
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
 <style>
-body{font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans",sans-serif;max-width:900px;margin:auto;padding:12px;background:#f6f2ff}
-.card{background:#fff;border-radius:14px;padding:12px;margin:10px 0}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans",sans-serif;
+  max-width:900px;margin:auto;padding:12px;background:#f6f2ff
+}
+h1{font-size:20px}
+.card{
+  background:#fff;border-radius:14px;padding:12px;margin:10px 0;
+  box-shadow:0 8px 24px rgba(0,0,0,.06)
+}
 textarea,input{width:100%;padding:8px;border-radius:8px;border:1px solid #ccc}
 button{padding:6px 12px;border-radius:999px;border:none;background:#7b6cff;color:#fff}
+button.ghost{background:#fff;color:#333;border:1px solid #ddd}
 .muted{font-size:12px;opacity:.7}
-.reply{margin-left:16px;border-left:3px solid #eee;padding-left:8px}
+.reply{margin-left:20px;border-left:3px solid #eee;padding-left:10px}
+img{max-width:100%;border-radius:10px;margin-top:6px}
+.actions{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}
 </style>
 </head>
 
 <body>
-<h2>🕊️ タイムライン</h2>
+
+<h1>💑 Couple Timeline</h1>
 
 <div class="card">
-  <textarea id="tweetText" placeholder="つぶやく…"></textarea>
-  <button onclick="postTweet()">投稿</button>
+  <textarea id="postText" placeholder="つぶやく / 日記に返信 / つぶやきに返信"></textarea>
+  <div class="muted" id="replyInfo"></div>
+  <button onclick="post()">投稿</button>
+  <button class="ghost" onclick="cancelReply()">返信キャンセル</button>
 </div>
 
 <div class="card">
-  <label class="muted">月で絞り込み</label>
+  <label class="muted">📅 月で絞り込み</label>
   <input type="month" id="month">
 </div>
 
@@ -38,36 +52,58 @@ const sb = supabase.createClient(
 );
 const COUPLE_ID = "kentaria";
 
+let replyTarget = null; // { type: 'tweet'|'diary', id }
+
 function esc(s){return (s||"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));}
 
-async function postTweet(parent_id=null){
-  const body = tweetText.value.trim();
+function monthRange(m){
+  if(!m){
+    const d=new Date();
+    m=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+  }
+  const [y,mm]=m.split("-");
+  return {start:`${y}-${mm}-01`, end:`${y}-${mm}-31`};
+}
+
+function startReply(type,id){
+  replyTarget={type,id};
+  replyInfo.textContent=`↩ ${type==="diary"?"日記":"つぶやき"}への返信中`;
+  postText.focus();
+}
+
+function cancelReply(){
+  replyTarget=null;
+  replyInfo.textContent="";
+}
+
+async function post(){
+  const body=postText.value.trim();
   if(!body) return;
-  await sb.from("tweets").insert([{ couple_id:COUPLE_ID, body, parent_id }]);
-  tweetText.value="";
+
+  if(replyTarget){
+    if(replyTarget.type==="tweet"){
+      await sb.from("tweets").insert([{couple_id:COUPLE_ID,body,parent_id:replyTarget.id}]);
+    }else{
+      await sb.from("tweets").insert([{couple_id:COUPLE_ID,body,parent_id:null,reply_diary_id:replyTarget.id}]);
+    }
+  }else{
+    await sb.from("tweets").insert([{couple_id:COUPLE_ID,body}]);
+  }
+
+  postText.value="";
+  cancelReply();
   load();
 }
 
 async function toggleLike(type,id){
   const { data } = await sb.from("likes")
-    .select("*")
-    .eq("couple_id",COUPLE_ID)
-    .eq("target_type",type)
-    .eq("target_id",id)
-    .maybeSingle();
+    .select("*").eq("couple_id",COUPLE_ID)
+    .eq("target_type",type).eq("target_id",id).maybeSingle();
 
-  if(data){
-    await sb.from("likes").delete().eq("id",data.id);
-  }else{
-    await sb.from("likes").insert([{ couple_id:COUPLE_ID, target_type:type, target_id:id }]);
-  }
+  if(data) await sb.from("likes").delete().eq("id",data.id);
+  else await sb.from("likes").insert([{couple_id:COUPLE_ID,target_type:type,target_id:id}]);
+
   load();
-}
-
-function monthRange(m){
-  if(!m){const d=new Date();m=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;}
-  const [y,mm]=m.split("-");
-  return {start:`${y}-${mm}-01`, end:`${y}-${mm}-31`};
 }
 
 async function load(){
@@ -99,10 +135,13 @@ async function load(){
     div.className="card"+(it.parent_id?" reply":"");
     div.innerHTML=`
       <div class="muted">${it.type==="diary"?"📔 日記":"🕊️ つぶやき"}</div>
-      <div>${esc(it.title||"")}</div>
+      <b>${esc(it.title||"")}</b>
       <div>${esc(it.body||"")}</div>
-      <button onclick="toggleLike('${it.type}',${it.id})">♥ ${likeMap[key]||0}</button>
-      ${it.type==="tweet"?`<button onclick="tweetText.value='↩ ';postTweet(${it.id})">返信</button>`:""}
+      ${it.image_url?`<img src="${it.image_url}">`:""}
+      <div class="actions">
+        <button onclick="toggleLike('${it.type}',${it.id})">♥ ${likeMap[key]||0}</button>
+        <button class="ghost" onclick="startReply('${it.type}',${it.id})">返信</button>
+      </div>
     `;
     timeline.appendChild(div);
   });
