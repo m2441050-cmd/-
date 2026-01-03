@@ -1,153 +1,437 @@
 <!doctype html>
 <html lang="ja">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>Couple Timeline</title>
-
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
 <style>
-body{
-  font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans",sans-serif;
-  max-width:900px;margin:auto;padding:12px;background:#f6f2ff
-}
-h1{font-size:20px}
-.card{
-  background:#fff;border-radius:14px;padding:12px;margin:10px 0;
-  box-shadow:0 8px 24px rgba(0,0,0,.06)
-}
-textarea,input{width:100%;padding:8px;border-radius:8px;border:1px solid #ccc}
-button{padding:6px 12px;border-radius:999px;border:none;background:#7b6cff;color:#fff}
-button.ghost{background:#fff;color:#333;border:1px solid #ddd}
-.muted{font-size:12px;opacity:.7}
-.reply{margin-left:20px;border-left:3px solid #eee;padding-left:10px}
-img{max-width:100%;border-radius:10px;margin-top:6px}
-.actions{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans",sans-serif;max-width:900px;margin:auto;padding:12px;background:#f6f2ff}
+  .card{background:#fff;border-radius:14px;padding:12px;margin:10px 0;box-shadow:0 1px 0 rgba(0,0,0,.03)}
+  textarea,input{width:100%;padding:8px;border-radius:8px;border:1px solid #ccc}
+  button{padding:6px 12px;border-radius:999px;border:none;background:#7b6cff;color:#fff;cursor:pointer}
+  button.ghost{background:#fff;color:#333;border:1px solid #ddd}
+  button.danger{background:#ff4d6d}
+  .muted{font-size:12px;opacity:.7}
+  .actions{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;align-items:center}
+  .reply{margin-left:20px;border-left:3px solid #eee;padding-left:10px}
+  img{max-width:100%;border-radius:10px;margin-top:8px}
+  .row{display:flex;gap:8px;flex-wrap:wrap}
+  .grow{flex:1}
+  .pill{display:inline-flex;gap:6px;align-items:center;padding:4px 10px;border:1px solid #e9e3ff;border-radius:999px;background:#faf8ff;font-size:12px}
+  .sep{height:1px;background:#f0f0f0;margin:10px 0}
+  .error{color:#b00020;font-size:12px;margin-top:6px;white-space:pre-wrap}
+  .meta{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .time{font-size:12px;opacity:.7}
 </style>
 </head>
 
 <body>
-
 <h1>💑 Couple Timeline</h1>
 
 <div class="card">
-  <textarea id="postText" placeholder="つぶやく / 日記に返信 / つぶやきに返信"></textarea>
-  <div class="muted" id="replyInfo"></div>
-  <button onclick="post()">投稿</button>
-  <button class="ghost" onclick="cancelReply()">返信キャンセル</button>
+  <textarea id="postText" placeholder="つぶやく / 返信する"></textarea>
+
+  <div class="row" style="margin-top:8px">
+    <input class="grow" id="imageUrl" placeholder="画像URL（https://...jpg/png/webp） ※任意" />
+  </div>
+
+  <div class="meta" style="margin-top:8px">
+    <span class="pill" id="replyInfo" style="display:none"></span>
+    <span class="muted" id="status"></span>
+  </div>
+
+  <div class="actions">
+    <button id="postBtn">投稿</button>
+    <button class="ghost" id="cancelReplyBtn">返信キャンセル</button>
+    <button class="ghost" id="reloadBtn">再読み込み</button>
+  </div>
+
+  <div class="error" id="err"></div>
 </div>
 
 <div class="card">
   <label class="muted">📅 月で絞り込み</label>
-  <input type="month" id="month">
+  <input type="month" id="month" />
 </div>
 
 <div id="timeline"></div>
 
 <script>
+/** ===========
+ *  設定
+ *  =========== */
 const sb = supabase.createClient(
   "https://eycneuftjdooykzjbioy.supabase.co",
   "sb_publishable_ySwVIipmFAvN6VGexnR0PQ_RDsZ4M2Z"
 );
 const COUPLE_ID = "kentaria";
 
-let replyTarget = null; // { type: 'tweet'|'diary', id }
+/** ===========
+ *  状態
+ *  =========== */
+let replyTarget = null; // { type: 'tweet'|'diary', id: number }
 
-function esc(s){return (s||"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));}
+/** ===========
+ *  DOM
+ *  =========== */
+const postText = document.getElementById("postText");
+const imageUrl = document.getElementById("imageUrl");
+const replyInfo = document.getElementById("replyInfo");
+const statusEl = document.getElementById("status");
+const errEl = document.getElementById("err");
+const timeline = document.getElementById("timeline");
+const month = document.getElementById("month");
+const postBtn = document.getElementById("postBtn");
+const cancelReplyBtn = document.getElementById("cancelReplyBtn");
+const reloadBtn = document.getElementById("reloadBtn");
 
-function monthRange(m){
-  if(!m){
-    const d=new Date();
-    m=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
-  }
-  const [y,mm]=m.split("-");
-  return {start:`${y}-${mm}-01`, end:`${y}-${mm}-31`};
+/** ===========
+ *  ユーティリティ
+ *  =========== */
+function esc(s){
+  return (s || "").replace(/[&<>"']/g, c => ({
+    "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"
+  }[c]));
 }
 
-function startReply(type,id){
-  replyTarget={type,id};
-  replyInfo.textContent=`↩ ${type==="diary"?"日記":"つぶやき"}への返信中`;
+function fmtTime(iso){
+  if(!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,"0");
+  const da = String(d.getDate()).padStart(2,"0");
+  const hh = String(d.getHours()).padStart(2,"0");
+  const mm = String(d.getMinutes()).padStart(2,"0");
+  return `${y}/${m}/${da} ${hh}:${mm}`;
+}
+
+function setStatus(msg){
+  statusEl.textContent = msg || "";
+}
+
+function setError(msg){
+  errEl.textContent = msg || "";
+}
+
+function getMonthValueOrNow(){
+  if(month.value) return month.value;
+  const d = new Date();
+  const v = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+  month.value = v;
+  return v;
+}
+
+// 月の開始・終了(次月の1日未満)を正しく作る
+function monthRange(monthStr){
+  const [y, m] = monthStr.split("-").map(Number);
+  const start = new Date(y, m-1, 1, 0, 0, 0);
+  const endExclusive = new Date(y, m, 1, 0, 0, 0); // 次月の1日
+  return {
+    startISO: start.toISOString(),
+    endISO: endExclusive.toISOString(),
+    // date型(YYYY-MM-DD)用にローカルで作る
+    startDate: `${y}-${String(m).padStart(2,"0")}-01`,
+    endDate: (() => {
+      const last = new Date(y, m, 0); // 当月末日
+      return `${y}-${String(m).padStart(2,"0")}-${String(last.getDate()).padStart(2,"0")}`;
+    })()
+  };
+}
+
+function isValidHttpUrl(url){
+  try{
+    const u = new URL(url);
+    return u.protocol === "http:" || u.protocol === "https:";
+  }catch(e){
+    return false;
+  }
+}
+
+function startReply(type, id){
+  replyTarget = { type, id };
+  replyInfo.style.display = "inline-flex";
+  replyInfo.textContent = `↩ ${type === "diary" ? "日記" : "つぶやき"}への返信中 (#${id})`;
   postText.focus();
 }
 
 function cancelReply(){
-  replyTarget=null;
-  replyInfo.textContent="";
+  replyTarget = null;
+  replyInfo.textContent = "";
+  replyInfo.style.display = "none";
 }
 
-async function post(){
-  const body=postText.value.trim();
-  if(!body) return;
+async function safeQuery(promise){
+  const { data, error } = await promise;
+  if(error) throw error;
+  return data;
+}
 
-  if(replyTarget){
-    if(replyTarget.type==="tweet"){
-      await sb.from("tweets").insert([{couple_id:COUPLE_ID,body,parent_id:replyTarget.id}]);
-    }else{
-      await sb.from("tweets").insert([{couple_id:COUPLE_ID,body,parent_id:null,reply_diary_id:replyTarget.id}]);
-    }
-  }else{
-    await sb.from("tweets").insert([{couple_id:COUPLE_ID,body}]);
+/** ===========
+ *  投稿
+ *  =========== */
+async function post(){
+  setError("");
+  const body = postText.value.trim();
+  const img = imageUrl.value.trim();
+
+  if(!body){
+    setError("本文が空です。");
+    return;
   }
 
-  postText.value="";
-  cancelReply();
-  load();
+  let image_url = null;
+  if(img){
+    if(!isValidHttpUrl(img)){
+      setError("画像URLが不正です（http/https のURLにしてください）。");
+      return;
+    }
+    image_url = img;
+  }
+
+  postBtn.disabled = true;
+  setStatus("投稿中…");
+
+  try{
+    const row = {
+      couple_id: COUPLE_ID,
+      body,
+      image_url,                // ★あなたの元コードではここが未反映でした
+      parent_id: null,
+      reply_diary_id: null
+    };
+
+    if(replyTarget){
+      if(replyTarget.type === "tweet") row.parent_id = replyTarget.id;
+      if(replyTarget.type === "diary") row.reply_diary_id = replyTarget.id;
+    }
+
+    await safeQuery(
+      sb.from("tweets").insert([row])
+    );
+
+    postText.value = "";
+    imageUrl.value = "";
+    cancelReply();
+    setStatus("投稿しました");
+    await load();
+  }catch(e){
+    setError(`投稿に失敗しました。\n${e.message || e}`);
+  }finally{
+    postBtn.disabled = false;
+    setStatus("");
+  }
 }
 
-async function toggleLike(type,id){
-  const { data } = await sb.from("likes")
-    .select("*").eq("couple_id",COUPLE_ID)
-    .eq("target_type",type).eq("target_id",id).maybeSingle();
-
-  if(data) await sb.from("likes").delete().eq("id",data.id);
-  else await sb.from("likes").insert([{couple_id:COUPLE_ID,target_type:type,target_id:id}]);
-
-  load();
-}
-
-async function load(){
-  timeline.innerHTML="読み込み中…";
-  const {start,end}=monthRange(month.value);
-
-  const { data: diaries } = await sb.from("diaries")
-    .select("*").eq("couple_id",COUPLE_ID)
-    .gte("date",start).lte("date",end);
-
-  const { data: tweets } = await sb.from("tweets")
-    .select("*").eq("couple_id",COUPLE_ID);
-
-  const { data: likes } = await sb.from("likes")
-    .select("*").eq("couple_id",COUPLE_ID);
-
-  const likeMap={};
-  (likes||[]).forEach(l=>likeMap[l.target_type+"_"+l.target_id]=(likeMap[l.target_type+"_"+l.target_id]||0)+1);
-
-  const items=[
-    ...(diaries||[]).map(d=>({...d,type:"diary",created_at:d.created_at})),
-    ...(tweets||[]).map(t=>({...t,type:"tweet"}))
-  ].sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
-
-  timeline.innerHTML="";
-  items.forEach(it=>{
-    const key=it.type+"_"+it.id;
-    const div=document.createElement("div");
-    div.className="card"+(it.parent_id?" reply":"");
-    div.innerHTML=`
-      <div class="muted">${it.type==="diary"?"📔 日記":"🕊️ つぶやき"}</div>
-      <b>${esc(it.title||"")}</b>
-      <div>${esc(it.body||"")}</div>
-      ${it.image_url?`<img src="${it.image_url}">`:""}
-      <div class="actions">
-        <button onclick="toggleLike('${it.type}',${it.id})">♥ ${likeMap[key]||0}</button>
-        <button class="ghost" onclick="startReply('${it.type}',${it.id})">返信</button>
-      </div>
-    `;
-    timeline.appendChild(div);
+/** ===========
+ *  描画
+ *  =========== */
+// ツイートの返信（parent_id）をツリー化
+function buildTweetTree(tweets){
+  const byId = new Map();
+  tweets.forEach(t => {
+    byId.set(t.id, { ...t, replies: [] });
   });
+
+  const roots = [];
+  byId.forEach(node => {
+    if(node.parent_id && byId.has(node.parent_id)){
+      byId.get(node.parent_id).replies.push(node);
+    }else{
+      roots.push(node);
+    }
+  });
+
+  // replies も含めて新しい順に
+  function sortRec(arr){
+    arr.sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
+    arr.forEach(x => sortRec(x.replies));
+  }
+  sortRec(roots);
+
+  return roots;
 }
 
-month.onchange=load;
+function renderTweetNode(node, depth=0){
+  const div = document.createElement("div");
+  div.className = "card" + (depth>0 ? " reply" : "");
+  div.innerHTML = `
+    <div class="meta">
+      <div class="muted">🕊️ つぶやき</div>
+      <div class="time">${fmtTime(node.created_at)}</div>
+      <div class="muted">#${node.id}</div>
+    </div>
+    <div style="margin-top:6px">${esc(node.body || "")}</div>
+    ${node.image_url ? `<img src="${esc(node.image_url)}" alt="image">` : ""}
+    <div class="actions">
+      <button class="ghost" onclick="startReply('tweet', ${node.id})">返信</button>
+    </div>
+  `;
+
+  const frag = document.createDocumentFragment();
+  frag.appendChild(div);
+
+  node.replies.forEach(r => {
+    frag.appendChild(renderTweetNode(r, depth+1));
+  });
+
+  return frag;
+}
+
+function renderDiaryCard(diary, relatedTweetRoots){
+  const div = document.createElement("div");
+  div.className = "card";
+  const when = diary.created_at ? fmtTime(diary.created_at) : (diary.date ? `${diary.date}` : "");
+  div.innerHTML = `
+    <div class="meta">
+      <div class="muted">📔 日記</div>
+      <div class="time">${esc(when)}</div>
+      <div class="muted">#${diary.id}</div>
+    </div>
+    <div style="margin-top:6px">${esc(diary.body || "")}</div>
+    ${diary.image_url ? `<img src="${esc(diary.image_url)}" alt="image">` : ""}
+    <div class="actions">
+      <button class="ghost" onclick="startReply('diary', ${diary.id})">返信</button>
+    </div>
+  `;
+
+  const wrap = document.createElement("div");
+  wrap.appendChild(div);
+
+  // 日記への返信（reply_diary_id）をぶら下げて表示（ツリーは tweets の parent_id 側で保持）
+  if(relatedTweetRoots.length){
+    const sep = document.createElement("div");
+    sep.className = "sep";
+    wrap.appendChild(sep);
+
+    relatedTweetRoots.forEach(root => {
+      wrap.appendChild(renderTweetNode(root, 1)); // diary配下としてインデント
+    });
+  }
+
+  return wrap;
+}
+
+/** ===========
+ *  ロード
+ *  =========== */
+async function load(){
+  setError("");
+  setStatus("読み込み中…");
+  timeline.innerHTML = "";
+
+  const m = getMonthValueOrNow();
+  const { startISO, endISO, startDate, endDate } = monthRange(m);
+
+  try{
+    // 1) diaries: date(YYYY-MM-DD)で月フィルタ（あなたのコードの31固定を修正）
+    //    ※もし diaries が created_at で管理なら、下の where を created_at に変えてOK
+    const diaries = await safeQuery(
+      sb.from("diaries")
+        .select("*")
+        .eq("couple_id", COUPLE_ID)
+        .gte("date", startDate)
+        .lte("date", endDate)
+        .order("date", { ascending: false })
+    );
+
+    // 2) tweets: created_at で月フィルタ（あなたのコードは月で絞れてませんでした）
+    const tweets = await safeQuery(
+      sb.from("tweets")
+        .select("*")
+        .eq("couple_id", COUPLE_ID)
+        .gte("created_at", startISO)
+        .lt("created_at", endISO)
+        .order("created_at", { ascending: false })
+    );
+
+    // 3) ツイートを
+    //    - 日記への返信(reply_diary_id) と
+    //    - ツイート返信(parent_id)
+    //    に分けて、見やすく表示
+    const tweetsToDiary = (tweets || []).filter(t => t.reply_diary_id);
+    const normalTweets = (tweets || []).filter(t => !t.reply_diary_id);
+
+    const tweetRoots = buildTweetTree(normalTweets);
+
+    // 日記ごとに、日記への返信ツイートをツリー化してぶら下げ
+    const diaryReplyMap = new Map(); // diary_id -> tweet[]
+    tweetsToDiary.forEach(t => {
+      const k = t.reply_diary_id;
+      if(!diaryReplyMap.has(k)) diaryReplyMap.set(k, []);
+      diaryReplyMap.get(k).push(t);
+    });
+
+    // 日記への返信も parent_id でツリー化（同じreply_diary_id内で）
+    function buildDiaryReplies(diaryId){
+      const list = diaryReplyMap.get(diaryId) || [];
+      return buildTweetTree(list); // parent_id でツリー化
+    }
+
+    // 4) 統合表示：日記＋ツイート（created_at基準で並べる）
+    //    diariesは created_at が無いこともあるので、その場合は date を 12:00 JST 相当で仮変換
+    function diarySortTime(d){
+      if(d.created_at) return new Date(d.created_at).getTime();
+      if(d.date){
+        // 日付だけの場合、並び順が乱れないように昼固定
+        const [y,m,da] = d.date.split("-").map(Number);
+        return new Date(y, m-1, da, 12, 0, 0).getTime();
+      }
+      return 0;
+    }
+
+    const diaryItems = (diaries || []).map(d => ({ type:"diary", sort: diarySortTime(d), data:d }));
+    const tweetItems  = (tweetRoots || []).map(t => ({ type:"tweet", sort: new Date(t.created_at).getTime(), data:t }));
+
+    const items = [...diaryItems, ...tweetItems].sort((a,b)=>b.sort - a.sort);
+
+    if(items.length === 0){
+      timeline.innerHTML = `<div class="card"><div class="muted">この月の投稿はありません。</div></div>`;
+      setStatus("");
+      return;
+    }
+
+    items.forEach(item => {
+      if(item.type === "diary"){
+        const d = item.data;
+        const replyRoots = buildDiaryReplies(d.id);
+        timeline.appendChild(renderDiaryCard(d, replyRoots));
+      }else{
+        timeline.appendChild(renderTweetNode(item.data, 0));
+      }
+    });
+
+    setStatus("");
+  }catch(e){
+    setStatus("");
+    setError(`読み込みに失敗しました。\n${e.message || e}`);
+    timeline.innerHTML = `<div class="card"><div class="muted">エラーが発生しました。</div></div>`;
+  }
+}
+
+/** ===========
+ *  イベント
+ *  =========== */
+postBtn.addEventListener("click", post);
+cancelReplyBtn.addEventListener("click", cancelReply);
+reloadBtn.addEventListener("click", load);
+month.addEventListener("change", load);
+
+// Enterで送信（Shift+Enterで改行）
+postText.addEventListener("keydown", (e)=>{
+  if(e.key === "Enter" && !e.shiftKey){
+    e.preventDefault();
+    post();
+  }
+});
+
+// グローバル（onclickから呼ぶため）
+window.startReply = startReply;
+
+// 初期ロード
+getMonthValueOrNow();
 load();
 </script>
 </body>
