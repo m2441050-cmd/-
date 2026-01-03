@@ -34,7 +34,6 @@ img{max-width:100%;border-radius:12px;margin-top:8px}
 
 .post{border-bottom:1px solid #eee;padding-bottom:12px;margin-bottom:12px}
 .actions{display:flex;gap:10px;margin-top:8px;flex-wrap:wrap}
-.reply{margin-left:16px;border-left:3px solid #eee;padding-left:10px}
 .small{font-size:12px}
 </style>
 </head>
@@ -42,16 +41,18 @@ img{max-width:100%;border-radius:12px;margin-top:8px}
 <body>
 
 <h1>🕊️ タイムライン</h1>
-<div class="muted">日記・つぶやき・写真・いいね・返信</div>
+<div class="muted">日記・写真・つぶやき・いいね</div>
 
 <div class="card">
-  <textarea id="tweetBody" placeholder="いまの気持ちを一言…（日記とは別）"></textarea>
-  <input type="file" id="tweetImage" accept="image/*">
-  <div style="margin-top:8px">
-    <button id="tweetBtn">投稿</button>
-  </div>
+  <textarea id="tweetBody" placeholder="今の気持ちを一言…"></textarea>
+  <button id="tweetBtn">投稿</button>
   <div class="err" id="err"></div>
   <div class="ok" id="ok"></div>
+</div>
+
+<div class="card">
+  <label class="muted">月で絞り込み</label>
+  <input type="month" id="month">
 </div>
 
 <div id="timeline"></div>
@@ -62,7 +63,6 @@ const SUPABASE_ANON_KEY = "sb_publishable_ySwVIipmFAvN6VGexnR0PQ_RDsZ4M2Z";
 const COUPLE_ID = "kentaria";
 
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
 const timeline = document.getElementById("timeline");
 const errEl = document.getElementById("err");
 const okEl = document.getElementById("ok");
@@ -71,39 +71,35 @@ function esc(s){return (s||"").replace(/[&<>"']/g,c=>(
 {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]
 ));}
 
-async function uploadImage(file){
-  if(!file) return null;
-  const path = `${COUPLE_ID}/${Date.now()}_${file.name}`;
-  const { error } = await sb.storage.from("timeline-images").upload(path, file, { upsert:true });
-  if(error) throw error;
-  return sb.storage.from("timeline-images").getPublicUrl(path).data.publicUrl;
-}
-
-async function postTweet(parent_id=null){
-  errEl.textContent=""; okEl.textContent="";
-  try{
-    const body = tweetBody.value.trim();
-    if(!body){ errEl.textContent="空です"; return; }
-
-    const image = await uploadImage(tweetImage.files[0]);
-
-    await sb.from("tweets").insert([{
-      couple_id: COUPLE_ID,
-      body,
-      image_url: image,
-      parent_id
-    }]);
-
-    tweetBody.value="";
-    tweetImage.value="";
-    okEl.textContent="投稿しました";
-    loadTimeline();
-  }catch(e){
-    errEl.textContent=e.message;
+function monthRange(m){
+  if(!m){
+    const d=new Date();
+    m=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
   }
+  const [y,mm]=m.split("-");
+  return {
+    start:`${y}-${mm}-01`,
+    end:`${y}-${mm}-31`
+  };
 }
 
-tweetBtn.onclick = ()=>postTweet();
+async function postTweet(){
+  errEl.textContent=""; okEl.textContent="";
+  const body = tweetBody.value.trim();
+  if(!body){ errEl.textContent="空です"; return; }
+
+  const { error } = await sb.from("tweets").insert([{
+    couple_id:COUPLE_ID,
+    body
+  }]);
+  if(error){ errEl.textContent=error.message; return; }
+
+  tweetBody.value="";
+  okEl.textContent="投稿しました";
+  loadTimeline();
+}
+
+tweetBtn.onclick = postTweet;
 
 async function toggleLike(type,id){
   const { data } = await sb.from("likes")
@@ -127,6 +123,15 @@ async function toggleLike(type,id){
 
 async function loadTimeline(){
   timeline.innerHTML="読み込み中…";
+  const { start, end } = monthRange(month.value);
+
+  const { data: diaries } = await sb
+    .from("diaries")
+    .select("*")
+    .eq("couple_id",COUPLE_ID)
+    .gte("date",start)
+    .lte("date",end)
+    .order("created_at",{ascending:false});
 
   const { data: tweets } = await sb
     .from("tweets")
@@ -139,43 +144,35 @@ async function loadTimeline(){
     .select("*")
     .eq("couple_id",COUPLE_ID);
 
-  const likeMap = {};
+  const likeMap={};
   likes.forEach(l=>{
-    const k = l.target_type+"_"+l.target_id;
-    likeMap[k]=(likeMap[k]||0)+1;
+    likeMap[l.target_type+"_"+l.target_id]=(likeMap[l.target_type+"_"+l.target_id]||0)+1;
   });
+
+  const items=[
+    ...(diaries||[]).map(d=>({...d,type:"diary"})),
+    ...(tweets||[]).map(t=>({...t,type:"tweet"}))
+  ].sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
 
   timeline.innerHTML="";
-  tweets.filter(t=>!t.parent_id).forEach(t=>{
-    renderPost(t,tweets,likeMap);
+  items.forEach(it=>{
+    const key=it.type+"_"+it.id;
+    const div=document.createElement("div");
+    div.className="card post";
+    div.innerHTML=`
+      <div class="small muted">${it.type==="diary"?"📔 日記":"🕊️ つぶやき"} / ${new Date(it.created_at).toLocaleString()}</div>
+      <div>${esc(it.title||"")}</div>
+      <div>${esc(it.body||"")}</div>
+      ${it.image_url?`<img src="${esc(it.image_url)}">`:""}
+      <div class="actions small">
+        <button onclick="toggleLike('${it.type}',${it.id})">♥ ${likeMap[key]||0}</button>
+      </div>
+    `;
+    timeline.appendChild(div);
   });
 }
 
-function renderPost(t,all,likeMap,depth=0){
-  const div=document.createElement("div");
-  div.className="post"+(depth?" reply":"");
-  const key="tweet_"+t.id;
-  div.innerHTML=`
-    <div>${esc(t.body)}</div>
-    ${t.image_url?`<img src="${esc(t.image_url)}">`:""}
-    <div class="actions small">
-      <button onclick="toggleLike('tweet',${t.id})">♥ ${likeMap[key]||0}</button>
-      <button class="ghost" onclick="reply(${t.id})">返信</button>
-      <span class="muted">${new Date(t.created_at).toLocaleString()}</span>
-    </div>
-  `;
-  timeline.appendChild(div);
-
-  all.filter(x=>x.parent_id===t.id).forEach(r=>{
-    renderPost(r,all,likeMap,depth+1);
-  });
-}
-
-window.reply = (id)=>{
-  tweetBody.value="↩ ";
-  tweetBtn.onclick=()=>postTweet(id);
-};
-
+month.onchange = loadTimeline;
 loadTimeline();
 </script>
 </body>
