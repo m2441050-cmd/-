@@ -631,15 +631,22 @@ async function uploadDiaryImageIfAny(dateISO){
   return data?.publicUrl || null;
 }
 
-/* ✅ LINE通知（追加） */
+/* ✅ LINE通知（失敗理由を画面に出す版） */
 async function sendLine(text){
   try{
-    await fetch(LINE_PUSH_URL, {
+    const r = await fetch(LINE_PUSH_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text })
     });
-  }catch(_e){}
+    const t = await r.text();
+
+    // 🔴 ここが重要：結果を画面に表示
+    setDiaryStatus(`通知結果: ${r.status} ${t}`);
+  }catch(e){
+    setDiaryStatus("");
+    setDiaryError("通知エラー：" + (e?.message || String(e)));
+  }
 }
 
 async function loadDiary(){
