@@ -121,11 +121,7 @@
           <div class="row" style="margin-top:10px">
             <input id="diaryTitle" type="text" placeholder="タイトル（空なら無題）" style="flex:1;min-width:240px" />
           </div>
-          <div class="row" style="margin-top:6px">
-  <input id="diaryTags" type="text"
-    placeholder="タグ（例：旅行,幸せ,体調）"
-    style="flex:1" />
-</div>
+        
           <div style="margin-top:10px">
             <textarea id="diaryBody" placeholder="本文" style="width:100%;min-height:120px;resize:vertical"></textarea>
           </div>
@@ -621,7 +617,7 @@ async function saveDiary(){
   const body = (diaryBodyEl.value || "").trim();
   if(!body){ setDiaryError("本文が空です"); return; }
  
-  .split(",").map(s=>s.trim()).filter(Boolean);
+
 
   try{
     setDiaryError(""); setDiaryStatus("保存中…");
