@@ -2,7 +2,7 @@ name: Todo Morning Report (3AM JST)
 
 on:
   schedule:
-    - cron: "0 18 * * *"   # 毎日03:00 JST（UTCだと前日18:00）
+    - cron: "0 18 * * *"   # 毎日03:00 JST（UTC 18:00）
   workflow_dispatch:
 
 jobs:
@@ -13,7 +13,8 @@ jobs:
         env:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
-          curl -sS -X POST "https://eycneuftjdooykzjbioy.supabase.co/functions/v1/todo-morning-report" \
-            -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+          echo "calling function..."
+          curl -i -sS -X POST "https://eycneuftjdooykzjbioy.supabase.co/functions/v1/todo-morning-report" \
+            -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
             -H "Content-Type: application/json" \
             --data '{"couple_id":"kentaria"}'
