@@ -1,20 +1,29 @@
-name: Todo Morning Report (3AM JST)
+name: Todo Morning Report (7AM JST)
 
 on:
-  schedule:
-    - cron: "0 18 * * *"   # 毎日03:00 JST（UTC 18:00）
   workflow_dispatch:
+  schedule:
+    - cron: "0 22 * * *"  # UTC 22:00 = JST 7:00
 
 jobs:
   run:
     runs-on: ubuntu-latest
     steps:
-      - name: Call Supabase Edge Function
+      - name: Debug secret presence (safe)
         env:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
-          echo "calling function..."
-          curl -i -sS -X POST "https://eycneuftjdooykzjbioy.supabase.co/functions/v1/todo-morning-report" \
+          if [ -z "${SUPABASE_SERVICE_ROLE_KEY}" ]; then
+            echo "SECRET IS EMPTY"
+          else
+            echo "SECRET IS SET (length=${#SUPABASE_SERVICE_ROLE_KEY})"
+          fi
+
+      - name: Call Supabase Edge Function (with auth)
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          curl -i -X POST \
             -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
             -H "Content-Type: application/json" \
-            --data '{"couple_id":"kentaria"}'
+            https://eycneuftjdooykzjbioy.supabase.co/functions/v1/todo-morning-report
