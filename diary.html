@@ -3,82 +3,111 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>日記一覧 - Couple OS</title>
+<title>Couple Timeline</title>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
 <style>
 body{
   font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans",sans-serif;
-  max-width:900px;margin:0 auto;padding:16px;
+  max-width:900px;margin:auto;padding:12px;
   background:#f6f2ff;
 }
+h1{font-size:20px}
 .card{
-  background:#fff;border-radius:16px;padding:14px;margin:14px 0;
+  background:#fff;border-radius:16px;padding:14px;margin:12px 0;
   box-shadow:0 8px 24px rgba(0,0,0,.06);
 }
-img{max-width:100%;border-radius:12px;margin-top:8px}
+textarea,input{width:100%;padding:10px;border-radius:10px;border:1px solid #ccc}
+button{padding:8px 14px;border-radius:999px;border:none;background:#7b6cff;color:#fff}
 .muted{font-size:13px;opacity:.7}
-.err{color:#b00020;font-size:13px}
+img{max-width:100%;border-radius:12px;margin-top:8px}
+.actions{display:flex;gap:10px;margin-top:6px}
 </style>
 </head>
 
 <body>
-<h1>📔 日記一覧</h1>
-<div class="muted">保存された日記を新しい順に表示します</div>
+<h1>💑 Couple Timeline</h1>
 
-<div id="error" class="err"></div>
-<div id="list"></div>
+<div class="card">
+  <textarea id="tweet" placeholder="いまの気持ちをひとこと…"></textarea>
+  <button onclick="postTweet()">投稿</button>
+</div>
+
+<div id="timeline"></div>
 
 <script>
-const SUPABASE_URL = "https://eycneuftjdooykzjbioy.supabase.co";
-const SUPABASE_ANON_KEY = "sb_publishable_ySwVIipmFAvN6VGexnR0PQ_RDsZ4M2Z";
+const sb = supabase.createClient(
+  "https://eycneuftjdooykzjbioy.supabase.co",
+  "sb_publishable_ySwVIipmFAvN6VGexnR0PQ_RDsZ4M2Z"
+);
 const COUPLE_ID = "kentaria";
 
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-const list = document.getElementById("list");
-const errorEl = document.getElementById("error");
-
-function esc(s){
-  return (s||"").replace(/[&<>"']/g,c=>(
-    {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]
-  ));
+async function postTweet(){
+  const body = tweet.value.trim();
+  if(!body) return;
+  await sb.from("tweets").insert([{ couple_id:COUPLE_ID, body }]);
+  tweet.value="";
+  load();
 }
 
-async function loadDiaries(){
-  try{
-    const { data, error } = await sb
-      .from("diaries")
-      .select("*")
-      .eq("couple_id", COUPLE_ID)
-      .order("created_at", { ascending:false });
+async function toggleLike(type,id){
+  const { data } = await sb.from("likes")
+    .select("*")
+    .eq("couple_id",COUPLE_ID)
+    .eq("target_type",type)
+    .eq("target_id",id)
+    .maybeSingle();
 
-    if(error) throw error;
-
-    if(!data || data.length===0){
-      list.innerHTML = "<div class='card muted'>日記がありません</div>";
-      return;
-    }
-
-    list.innerHTML = "";
-    data.forEach(d=>{
-      const div = document.createElement("div");
-      div.className = "card";
-      div.innerHTML = `
-        <div class="muted">${esc(d.date)} / ${new Date(d.created_at).toLocaleString()}</div>
-        <h3>${esc(d.title||"無題")}</h3>
-        <div>${esc(d.body||"")}</div>
-        ${d.image_url ? `<img src="${esc(d.image_url)}">` : ""}
-      `;
-      list.appendChild(div);
-    });
-
-  }catch(e){
-    errorEl.textContent = e.message;
+  if(data){
+    await sb.from("likes").delete().eq("id",data.id);
+  }else{
+    await sb.from("likes").insert([{ couple_id:COUPLE_ID, target_type:type, target_id:id }]);
   }
+  load();
 }
 
-loadDiaries();
+async function load(){
+  timeline.innerHTML="読み込み中…";
+
+  const { data: diaries } = await sb.from("diaries")
+    .select("*").eq("couple_id",COUPLE_ID);
+
+  const { data: tweets } = await sb.from("tweets")
+    .select("*").eq("couple_id",COUPLE_ID);
+
+  const { data: likes } = await sb.from("likes")
+    .select("*").eq("couple_id",COUPLE_ID);
+
+  const likeMap = {};
+  (likes||[]).forEach(l=>{
+    likeMap[l.target_type+"_"+l.target_id]=(likeMap[l.target_type+"_"+l.target_id]||0)+1;
+  });
+
+  const items = [
+    ...(diaries||[]).map(d=>({...d,type:"diary"})),
+    ...(tweets||[]).map(t=>({...t,type:"tweet"}))
+  ].sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
+
+  timeline.innerHTML="";
+  items.forEach(it=>{
+    const key = it.type+"_"+it.id;
+    const div=document.createElement("div");
+    div.className="card";
+    div.innerHTML=`
+      <div class="muted">${it.type==="diary"?"📔 日記":"🕊️ つぶやき"}</div>
+      <b>${it.title||""}</b>
+      <div>${it.body||""}</div>
+      ${it.image_url?`<img src="${it.image_url}">`:""}
+      <div class="actions">
+        <button onclick="toggleLike('${it.type}',${it.id})">♥ ${likeMap[key]||0}</button>
+      </div>
+    `;
+    timeline.appendChild(div);
+  });
+}
+
+load();
 </script>
 </body>
 </html>
