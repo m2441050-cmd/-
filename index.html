@@ -701,30 +701,71 @@ async function saveDiary(){
   const body = (diaryBodyEl.value || "").trim();
   if(!body){ setDiaryError("本文が空です"); return; }
 
+  // line-push URL（あなたのproject-ref入り）
+  const LINE_PUSH_URL = "https://eycneuftjdooykzjbioy.supabase.co/functions/v1/line-push";
+
   try{
-    setDiaryError(""); setDiaryStatus("保存中…");
+    setDiaryError("");
+    setDiaryStatus("保存中…");
 
-    // 画像があればアップロード
-    const imageUrl = await uploadDiaryImageIfAny(dateISO);
+    // 画像があればアップロードしてURL取得（画像なしならnull）
+    let imageUrl = null;
+    try{
+      const f = diaryImageEl?.files?.[0];
+      if(f){
+        const ext = (f.name.split(".").pop() || "jpg").toLowerCase();
+        const path = `${COUPLE_ID}/${dateISO}/${Date.now()}.${ext}`;
 
-    // 日記保存
-    await insertDiary(dateISO, title, body, imageUrl);
+        const { error: upErr } = await sb.storage.from("diary-images").upload(path, f, { upsert:true });
+        if(upErr) throw upErr;
 
-    // LINE通知（失敗しても日記は保存扱い）
-    await sendLine(`日記を作成しました📝 ${dateISO}「${title}」`);
+        const { data } = sb.storage.from("diary-images").getPublicUrl(path);
+        imageUrl = data?.publicUrl || null;
+      }
+    }catch(imgErr){
+      // 画像だけ失敗しても原因を表示（ここで止めるかは好み）
+      setDiaryError("画像アップロード失敗：" + (imgErr?.message || String(imgErr)));
+      // 画像なしで続行するなら次の行を有効化
+      // imageUrl = null;
+      // 画像必須にしたいなら return; にする
+      // return;
+    }
 
-    setDiaryStatus("保存しました。");
+    // 日記保存（image_url列がある前提）
+    const { error: insErr } = await sb.from("diaries").insert([{
+      couple_id: COUPLE_ID,
+      date: dateISO,
+      title,
+      body,
+      image_url: imageUrl
+    }]);
+    if(insErr) throw insErr;
 
-    // 次回用にファイル選択リセット
+    // いったん再読み込み（ここで「読み込みました」が出る）
+    await loadDiary();
+
+    // ✅ LINE通知：結果を最後に表示（上書きされない）
+    try{
+      const r = await fetch(LINE_PUSH_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: `日記を作成しました📝 ${dateISO}「${title}」` })
+      });
+      const t = await r.text();
+      setDiaryStatus(`保存しました。 / 通知結果: ${r.status} ${t}`);
+    }catch(e){
+      setDiaryStatus("保存しました。（通知失敗）");
+      setDiaryError("通知エラー：" + (e?.message || String(e)));
+    }
+
+    // 次回用にリセット
     if(diaryImageEl) diaryImageEl.value = "";
 
-    await loadDiary();
   }catch(err){
     setDiaryStatus("");
     setDiaryError("保存エラー：" + (err.message || String(err)));
   }
 }
-
 async function deleteDiary(){
   if(!currentDiaryId){ setDiaryError("削除する日記がありません"); return; }
   try{
