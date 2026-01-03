@@ -3,7 +3,7 @@ name: Todo Morning Report (3AM JST)
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 22* * *"  # UTC 22:00 = JST 7:00
+    - cron: "0 22 * * *"  # UTC 22:00 = JST 3:00
 
 jobs:
   run:
