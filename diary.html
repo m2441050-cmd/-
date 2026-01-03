@@ -3,59 +3,32 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Timeline - Couple OS</title>
+<title>日記一覧 - Couple OS</title>
 
-<script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
 <style>
 body{
   font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans",sans-serif;
-  max-width:900px;margin:0 auto;padding:12px;
+  max-width:900px;margin:0 auto;padding:16px;
   background:#f6f2ff;
 }
-h1{font-size:20px;margin:0}
-.muted{opacity:.7;font-size:13px}
-.err{color:#b00020;font-size:13px}
-.ok{color:#0b7a35;font-size:13px}
-
 .card{
-  background:#fff;border-radius:16px;padding:14px;margin:12px 0;
+  background:#fff;border-radius:16px;padding:14px;margin:14px 0;
   box-shadow:0 8px 24px rgba(0,0,0,.06);
 }
-textarea,input{
-  width:100%;padding:10px;border-radius:10px;border:1px solid #ccc;
-}
-button{
-  padding:8px 14px;border-radius:999px;
-  border:none;background:#7b6cff;color:#fff;
-}
-button.ghost{background:#fff;color:#333;border:1px solid #ddd}
 img{max-width:100%;border-radius:12px;margin-top:8px}
-
-.post{border-bottom:1px solid #eee;padding-bottom:12px;margin-bottom:12px}
-.actions{display:flex;gap:10px;margin-top:8px;flex-wrap:wrap}
-.small{font-size:12px}
+.muted{font-size:13px;opacity:.7}
+.err{color:#b00020;font-size:13px}
 </style>
 </head>
 
 <body>
+<h1>📔 日記一覧</h1>
+<div class="muted">保存された日記を新しい順に表示します</div>
 
-<h1>🕊️ タイムライン</h1>
-<div class="muted">日記・写真・つぶやき・いいね</div>
-
-<div class="card">
-  <textarea id="tweetBody" placeholder="今の気持ちを一言…"></textarea>
-  <button id="tweetBtn">投稿</button>
-  <div class="err" id="err"></div>
-  <div class="ok" id="ok"></div>
-</div>
-
-<div class="card">
-  <label class="muted">月で絞り込み</label>
-  <input type="month" id="month">
-</div>
-
-<div id="timeline"></div>
+<div id="error" class="err"></div>
+<div id="list"></div>
 
 <script>
 const SUPABASE_URL = "https://eycneuftjdooykzjbioy.supabase.co";
@@ -63,117 +36,49 @@ const SUPABASE_ANON_KEY = "sb_publishable_ySwVIipmFAvN6VGexnR0PQ_RDsZ4M2Z";
 const COUPLE_ID = "kentaria";
 
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-const timeline = document.getElementById("timeline");
-const errEl = document.getElementById("err");
-const okEl = document.getElementById("ok");
+const list = document.getElementById("list");
+const errorEl = document.getElementById("error");
 
-function esc(s){return (s||"").replace(/[&<>"']/g,c=>(
-{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]
-));}
+function esc(s){
+  return (s||"").replace(/[&<>"']/g,c=>(
+    {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]
+  ));
+}
 
-function monthRange(m){
-  if(!m){
-    const d=new Date();
-    m=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+async function loadDiaries(){
+  try{
+    const { data, error } = await sb
+      .from("diaries")
+      .select("*")
+      .eq("couple_id", COUPLE_ID)
+      .order("created_at", { ascending:false });
+
+    if(error) throw error;
+
+    if(!data || data.length===0){
+      list.innerHTML = "<div class='card muted'>日記がありません</div>";
+      return;
+    }
+
+    list.innerHTML = "";
+    data.forEach(d=>{
+      const div = document.createElement("div");
+      div.className = "card";
+      div.innerHTML = `
+        <div class="muted">${esc(d.date)} / ${new Date(d.created_at).toLocaleString()}</div>
+        <h3>${esc(d.title||"無題")}</h3>
+        <div>${esc(d.body||"")}</div>
+        ${d.image_url ? `<img src="${esc(d.image_url)}">` : ""}
+      `;
+      list.appendChild(div);
+    });
+
+  }catch(e){
+    errorEl.textContent = e.message;
   }
-  const [y,mm]=m.split("-");
-  return {
-    start:`${y}-${mm}-01`,
-    end:`${y}-${mm}-31`
-  };
 }
 
-async function postTweet(){
-  errEl.textContent=""; okEl.textContent="";
-  const body = tweetBody.value.trim();
-  if(!body){ errEl.textContent="空です"; return; }
-
-  const { error } = await sb.from("tweets").insert([{
-    couple_id:COUPLE_ID,
-    body
-  }]);
-  if(error){ errEl.textContent=error.message; return; }
-
-  tweetBody.value="";
-  okEl.textContent="投稿しました";
-  loadTimeline();
-}
-
-tweetBtn.onclick = postTweet;
-
-async function toggleLike(type,id){
-  const { data } = await sb.from("likes")
-    .select("*")
-    .eq("couple_id",COUPLE_ID)
-    .eq("target_type",type)
-    .eq("target_id",id)
-    .maybeSingle();
-
-  if(data){
-    await sb.from("likes").delete().eq("id",data.id);
-  }else{
-    await sb.from("likes").insert([{
-      couple_id:COUPLE_ID,
-      target_type:type,
-      target_id:id
-    }]);
-  }
-  loadTimeline();
-}
-
-async function loadTimeline(){
-  timeline.innerHTML="読み込み中…";
-  const { start, end } = monthRange(month.value);
-
-  const { data: diaries } = await sb
-    .from("diaries")
-    .select("*")
-    .eq("couple_id",COUPLE_ID)
-    .gte("date",start)
-    .lte("date",end)
-    .order("created_at",{ascending:false});
-
-  const { data: tweets } = await sb
-    .from("tweets")
-    .select("*")
-    .eq("couple_id",COUPLE_ID)
-    .order("created_at",{ascending:false});
-
-  const { data: likes } = await sb
-    .from("likes")
-    .select("*")
-    .eq("couple_id",COUPLE_ID);
-
-  const likeMap={};
-  likes.forEach(l=>{
-    likeMap[l.target_type+"_"+l.target_id]=(likeMap[l.target_type+"_"+l.target_id]||0)+1;
-  });
-
-  const items=[
-    ...(diaries||[]).map(d=>({...d,type:"diary"})),
-    ...(tweets||[]).map(t=>({...t,type:"tweet"}))
-  ].sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
-
-  timeline.innerHTML="";
-  items.forEach(it=>{
-    const key=it.type+"_"+it.id;
-    const div=document.createElement("div");
-    div.className="card post";
-    div.innerHTML=`
-      <div class="small muted">${it.type==="diary"?"📔 日記":"🕊️ つぶやき"} / ${new Date(it.created_at).toLocaleString()}</div>
-      <div>${esc(it.title||"")}</div>
-      <div>${esc(it.body||"")}</div>
-      ${it.image_url?`<img src="${esc(it.image_url)}">`:""}
-      <div class="actions small">
-        <button onclick="toggleLike('${it.type}',${it.id})">♥ ${likeMap[key]||0}</button>
-      </div>
-    `;
-    timeline.appendChild(div);
-  });
-}
-
-month.onchange = loadTimeline;
-loadTimeline();
+loadDiaries();
 </script>
 </body>
 </html>
