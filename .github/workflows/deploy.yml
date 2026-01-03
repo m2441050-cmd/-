@@ -1,1 +1,21 @@
 
+name: Todo Morning Report (3AM JST)
+
+on:
+  schedule:
+    - cron: "0 18 * * *"   # 毎日03:00 JST（UTC 18:00）
+  workflow_dispatch:
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call Supabase Edge Function
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          echo "calling function..."
+          curl -i -sS -X POST "https://eycneuftjdooykzjbioy.supabase.co/functions/v1/todo-morning-report" \
+            -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+            -H "Content-Type: application/json" \
+            --data '{"couple_id":"kentaria"}'
