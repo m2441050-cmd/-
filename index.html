@@ -553,7 +553,7 @@ async function fetchDiary(dateISO){
 async function insertDiary(dateISO, title, body){
   const { error } = await sb
     .from("diaries")
-    .insert([{ couple_id: COUPLE_ID, date: dateISO, title, body,tags}]);
+    .insert([{ couple_id: COUPLE_ID, date: dateISO, title, body}]);
   if(error) throw error;
 }
 
@@ -620,7 +620,7 @@ async function saveDiary(){
   const title = (diaryTitleEl.value || "").trim() || "無題";
   const body = (diaryBodyEl.value || "").trim();
   if(!body){ setDiaryError("本文が空です"); return; }
-  const tags = (document.getElementById("diaryTags").value || "")
+ 
   .split(",").map(s=>s.trim()).filter(Boolean);
 
   try{
