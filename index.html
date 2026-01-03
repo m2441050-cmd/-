@@ -640,7 +640,7 @@ async function sendLine(text){
       body: JSON.stringify({ text })
     });
     const t = await r.text();
-
+    return { status: r.status, body: t };
     // 🔴 ここが重要：結果を画面に表示
     setDiaryStatus(`通知結果: ${r.status} ${t}`);
   }catch(e){
